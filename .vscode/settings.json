@@ -3,6 +3,7 @@
       "javascript",
       "javascriptreact",
       "typescript"
-    ]
+    ],
+    "vscode-edge-devtools.webhint": false
   }
   
