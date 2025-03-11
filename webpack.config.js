@@ -31,6 +31,15 @@ module.exports = async (env, options) => {
     },
     resolve: {
       extensions: [".ts", ".tsx", ".html", ".js"],
+      fallback: {
+        "crypto": false,
+        "path": false,
+        "os": false,
+        "fs": false,
+        "https": false,
+        "http": false,
+        "stream": false
+      },
     },
     module: {
       rules: [
