@@ -9,6 +9,10 @@ let GOOGLE_API_KEY = '';
 let AI_PROVIDER = 'gemini'; // Can be 'gemini' or 'openai'
 let GPT_MODEL = 'gpt-4o-mini'; // Can be any openai model designator
 
+// API clients - initialized on-demand when keys are available
+let openai: OpenAI | null = null;
+let genAI: GoogleGenerativeAI | null = null;
+
 // Function to set API keys and config at runtime
 export function setApiConfig(config: {
   openaiKey?: string;
@@ -16,10 +20,15 @@ export function setApiConfig(config: {
   provider?: 'gemini' | 'openai';
   model?: string;
 }) {
+  // Update keys and settings
   if (config.openaiKey) OPENAI_API_KEY = config.openaiKey;
   if (config.googleKey) GOOGLE_API_KEY = config.googleKey;
   if (config.provider) AI_PROVIDER = config.provider;
   if (config.model) GPT_MODEL = config.model;
+  
+  // Reset clients so they'll be re-initialized with new keys when needed
+  openai = null;
+  genAI = null;
 }
 
 // Column Names
@@ -55,13 +64,6 @@ interface SuggestedTransaction {
   updated_description: string;
   category: string;
 }
-
-// Initialize AI clients
-const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY,
-});
-
-const genAI = new GoogleGenerativeAI(GOOGLE_API_KEY);
 
 // Function to find similar transactions (simplified for Excel version)
 export async function findSimilarTransactions(
@@ -105,10 +107,15 @@ export async function lookupDescAndCategoryGemini(
   categoryList: string[]
 ): Promise<SuggestedTransaction[] | null> {
   if (!GOOGLE_API_KEY) {
-    throw new Error("Google API key not found. Please add it to your .env file.");
+    throw new Error("Google API key not found. Please set it in the settings panel.");
   }
 
   try {
+    // Initialize the API client if needed
+    if (!genAI) {
+      genAI = new GoogleGenerativeAI(GOOGLE_API_KEY);
+    }
+
     const transactionDict = {
       transactions: transactionList,
     };
@@ -180,10 +187,18 @@ export async function lookupDescAndCategoryOpenAI(
   categoryList: string[]
 ): Promise<SuggestedTransaction[] | null> {
   if (!OPENAI_API_KEY) {
-    throw new Error("OpenAI API key not found. Please add it to your .env file.");
+    throw new Error("OpenAI API key not found. Please set it in the settings panel.");
   }
 
   try {
+    // Initialize the OpenAI client if needed
+    if (!openai) {
+      openai = new OpenAI({
+        apiKey: OPENAI_API_KEY,
+        dangerouslyAllowBrowser: true // Required for browser environments
+      });
+    }
+
     const transactionDict = {
       transactions: transactionList,
     };
