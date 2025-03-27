@@ -38,6 +38,7 @@ const DESCRIPTION_COL_NAME = "Description";
 const CATEGORY_COL_NAME = "Category";
 const DATE_COL_NAME = "Date";
 const AMOUNT_COL_NAME = "Amount";
+const AI_TOUCHED_COL_NAME = "AI Touched";
 
 // Fallback Transaction Category
 const FALLBACK_CATEGORY = "To Be Categorized";
@@ -301,9 +302,15 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     const origDescColIndex = headers.indexOf(ORIGINAL_DESCRIPTION_COL_NAME);
     const descColIndex = headers.indexOf(DESCRIPTION_COL_NAME);
     const categoryColIndex = headers.indexOf(CATEGORY_COL_NAME);
+    const aiTouchedColIndex = headers.indexOf(AI_TOUCHED_COL_NAME);
     
     if (idColIndex === -1 || origDescColIndex === -1 || descColIndex === -1 || categoryColIndex === -1) {
       throw new Error("Required columns not found in Transactions table");
+    }
+    
+    // Don't require AI Touched column to be present, but log if it's missing
+    if (aiTouchedColIndex === -1) {
+      console.warn("AI Touched column not found in Transactions table");
     }
     
     // Get visible rows data
@@ -418,6 +425,13 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
         // Update the values in the array
         rows[actualRowIndex][descColIndex] = suggestion.updated_description;
         rows[actualRowIndex][categoryColIndex] = category;
+        
+        // Update AI Touched column with current date/time if column exists
+        if (aiTouchedColIndex !== -1) {
+          // Use Excel's native date/time representation (serial number)
+          // This lets Excel format the date according to the cell's format settings
+          rows[actualRowIndex][aiTouchedColIndex] = new Date();
+        }
         
         // Write back to the range
         visibleRange.values = rows;
