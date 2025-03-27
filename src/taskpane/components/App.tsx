@@ -113,40 +113,43 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
     }
     
     setIsLoading(true);
-    setNotification({ message: "", type: "info", visible: false });
+    setNotification({ message: "Processing transactions...", type: "info", visible: true });
     
-    try {
-      await Excel.run(async (context) => {
-        // Apply current API settings
-        setApiConfig(apiSettings);
-        
-        // Run the categorization function
-        const result = await categorizeUncategorizedTransactions(context);
-        
-        if (result.success) {
-          setNotification({
-            message: result.message,
-            type: "success",
-            visible: true
-          });
-        } else {
-          setNotification({
-            message: result.message,
-            type: "error",
-            visible: true
-          });
-        }
-      });
-    } catch (error) {
-      console.error("Error in handleAutoCategorize:", error);
-      setNotification({
-        message: error instanceof Error ? error.message : "An unknown error occurred",
-        type: "error",
-        visible: true
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    // Apply current API settings immediately
+    setApiConfig(apiSettings);
+    
+    // Use setTimeout to allow the UI to update before starting the intensive operation
+    setTimeout(async () => {
+      try {
+        await Excel.run(async (context) => {
+          // Run the categorization function
+          const result = await categorizeUncategorizedTransactions(context);
+          
+          if (result.success) {
+            setNotification({
+              message: result.message,
+              type: "success",
+              visible: true
+            });
+          } else {
+            setNotification({
+              message: result.message,
+              type: "error",
+              visible: true
+            });
+          }
+        });
+      } catch (error) {
+        console.error("Error in handleAutoCategorize:", error);
+        setNotification({
+          message: error instanceof Error ? error.message : "An unknown error occurred",
+          type: "error",
+          visible: true
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }, 50); // Small delay to allow UI to update
   };
 
   return (

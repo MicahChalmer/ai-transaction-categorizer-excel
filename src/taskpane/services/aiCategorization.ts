@@ -357,13 +357,14 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     }
     
     // For each uncategorized transaction, find similar transactions
-    for (let i = 0; i < uncategorizedTransactions.length; i++) {
+    // Use Promise.all to process all transactions in parallel
+    await Promise.all(uncategorizedTransactions.map(async (transaction, index) => {
       const similarTransactions = await findSimilarTransactions(
         categorizedTransactions,
-        uncategorizedTransactions[i].original_description
+        transaction.original_description
       );
-      uncategorizedTransactions[i].previous_transactions = similarTransactions;
-    }
+      uncategorizedTransactions[index].previous_transactions = similarTransactions;
+    }));
     
     // Get allowed categories from Categories table
     const categoryColRange = categoriesTable.getDataBodyRange().load("values");
