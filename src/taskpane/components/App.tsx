@@ -1,6 +1,5 @@
 import * as React from "react";
 import { useState } from "react";
-import TextInsertion from "./TextInsertion";
 import { 
   makeStyles, 
   Button, 
@@ -15,7 +14,6 @@ import {
   Field
 } from "@fluentui/react-components";
 import { Tag24Regular, Settings24Regular } from "@fluentui/react-icons";
-import { insertText } from "../taskpane";
 import { categorizeUncategorizedTransactions, setApiConfig } from "../services/aiCategorization";
 
 interface AppProps {
@@ -234,8 +232,6 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
           )}
         </div>
       )}
-      
-      <TextInsertion insertText={insertText} />
     </div>
   );
 };
