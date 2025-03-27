@@ -8,6 +8,7 @@
   <Description DefaultValue="Tiller AI for Excel"/>
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
+  <SupportUrl DefaultValue="https://example.com/"/>
   <Hosts>
     <Host Name="Workbook"/>
   </Hosts>
