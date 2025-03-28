@@ -39,6 +39,8 @@ interface ApiSettings {
   googleKey: string;
   provider: 'gemini' | 'openai';
   model: string;
+  maxBatchSize: number;
+  maxReferenceTransactions: number;
 }
 
 const useStyles = makeStyles({
@@ -85,7 +87,9 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
     openaiKey: ENV.OPENAI_API_KEY || "",
     googleKey: ENV.GOOGLE_API_KEY || "",
     provider: "gemini",
-    model: "gpt-4o-mini"
+    model: "gpt-4o-mini",
+    maxBatchSize: 50,
+    maxReferenceTransactions: 2000
   });
   
   const [showSettings, setShowSettings] = useState<boolean>(false);
@@ -97,12 +101,14 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
         openaiKey: ENV.OPENAI_API_KEY || "",
         googleKey: ENV.GOOGLE_API_KEY || "",
         provider: ENV.GOOGLE_API_KEY ? "gemini" : "openai",
-        model: apiSettings.model
+        model: apiSettings.model,
+        maxBatchSize: apiSettings.maxBatchSize,
+        maxReferenceTransactions: apiSettings.maxReferenceTransactions
       });
     }
   }, []);
   
-  const handleApiSettingChange = (field: keyof ApiSettings, value: string) => {
+  const handleApiSettingChange = (field: keyof ApiSettings, value: string | number) => {
     setApiSettings(prev => ({
       ...prev,
       [field]: value
@@ -110,10 +116,12 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
     
     // Apply API settings
     setApiConfig({
-      openaiKey: field === 'openaiKey' ? value : apiSettings.openaiKey,
-      googleKey: field === 'googleKey' ? value : apiSettings.googleKey,
+      openaiKey: field === 'openaiKey' ? value as string : apiSettings.openaiKey,
+      googleKey: field === 'googleKey' ? value as string : apiSettings.googleKey,
       provider: field === 'provider' ? value as 'gemini' | 'openai' : apiSettings.provider,
-      model: field === 'model' ? value : apiSettings.model
+      model: field === 'model' ? value as string : apiSettings.model,
+      maxBatchSize: field === 'maxBatchSize' ? value as number : apiSettings.maxBatchSize,
+      maxReferenceTransactions: field === 'maxReferenceTransactions' ? value as number : apiSettings.maxReferenceTransactions
     });
   };
 
@@ -251,6 +259,48 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
               </Field>
             </>
           )}
+          
+          <Divider className={styles.divider}>
+            <Text>Performance Settings</Text>
+          </Divider>
+          
+          <Field 
+            label="Max Batch Size" 
+            className={styles.apiKeyField}
+            hint="Maximum number of transactions to categorize in one batch"
+          >
+            <Input 
+              type="number"
+              min="1"
+              max="1000"
+              value={apiSettings.maxBatchSize.toString()}
+              onChange={(_e, data) => {
+                const value = parseInt(data.value);
+                if (!isNaN(value) && value > 0) {
+                  handleApiSettingChange('maxBatchSize', value);
+                }
+              }}
+            />
+          </Field>
+          
+          <Field 
+            label="Reference Transactions" 
+            className={styles.apiKeyField}
+            hint="Maximum number of previously categorized transactions to use as reference"
+          >
+            <Input 
+              type="number"
+              min="100"
+              max="5000"
+              value={apiSettings.maxReferenceTransactions.toString()}
+              onChange={(_e, data) => {
+                const value = parseInt(data.value);
+                if (!isNaN(value) && value >= 100) {
+                  handleApiSettingChange('maxReferenceTransactions', value);
+                }
+              }}
+            />
+          </Field>
         </div>
       )}
     </div>

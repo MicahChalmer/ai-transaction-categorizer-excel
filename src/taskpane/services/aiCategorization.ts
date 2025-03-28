@@ -9,6 +9,10 @@ let GOOGLE_API_KEY = '';
 let AI_PROVIDER = 'gemini'; // Can be 'gemini' or 'openai'
 let GPT_MODEL = 'gpt-4o-mini'; // Can be any openai model designator
 
+// Batch Processing Settings
+let MAX_BATCH_SIZE = 50; // Max number of transactions to categorize in one batch
+let MAX_REFERENCE_TRANSACTIONS = 2000; // Max number of reference transactions to include
+
 // API clients - initialized on-demand when keys are available
 let openai: OpenAI | null = null;
 let genAI: GoogleGenerativeAI | null = null;
@@ -19,12 +23,16 @@ export function setApiConfig(config: {
   googleKey?: string;
   provider?: 'gemini' | 'openai';
   model?: string;
+  maxBatchSize?: number;
+  maxReferenceTransactions?: number;
 }) {
   // Update keys and settings
   if (config.openaiKey) OPENAI_API_KEY = config.openaiKey;
   if (config.googleKey) GOOGLE_API_KEY = config.googleKey;
   if (config.provider) AI_PROVIDER = config.provider;
   if (config.model) GPT_MODEL = config.model;
+  if (config.maxBatchSize) MAX_BATCH_SIZE = config.maxBatchSize;
+  if (config.maxReferenceTransactions) MAX_REFERENCE_TRANSACTIONS = config.maxReferenceTransactions;
   
   // Reset clients so they'll be re-initialized with new keys when needed
   openai = null;
@@ -44,7 +52,6 @@ const AI_TOUCHED_COL_NAME = "AI Touched";
 const FALLBACK_CATEGORY = "To Be Categorized";
 
 // Other Parameters
-const MAX_BATCH_SIZE = 50;
 
 // Transaction interfaces
 interface Transaction {
@@ -353,9 +360,9 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     }
     
     // Limit the number of reference transactions to avoid too large requests
-    // Sort by most recent first and take the first 100
+    // Sort by most recent first and take up to the configured maximum
     const limitedReferenceTransactions = categorizedTransactions
-      .slice(0, 100);
+      .slice(0, MAX_REFERENCE_TRANSACTIONS);
     
     // Get allowed categories from Categories table
     const categoryColRange = categoriesTable.getDataBodyRange().load("values");
