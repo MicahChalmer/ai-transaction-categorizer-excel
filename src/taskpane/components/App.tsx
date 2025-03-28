@@ -112,8 +112,10 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
   const [openaiModels, setOpenaiModels] = useState<ModelOption[]>([]);
   const [geminiModels, setGeminiModels] = useState<ModelOption[]>([]);
   const [loadingModels, setLoadingModels] = useState<boolean>(false);
+  const [modelApiError, setModelApiError] = useState<string>("");
   
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [categorizationError, setCategorizationError] = useState<string>("");
   
   // Apply API settings on initial load
   useEffect(() => {
@@ -170,6 +172,7 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
     }
     
     setLoadingModels(true);
+    setModelApiError(""); // Clear previous errors
     
     try {
       // Create a simple fetch request to OpenAI models endpoint
@@ -181,11 +184,14 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
         }
       });
       
+      const responseText = await response.text();
+      
       if (!response.ok) {
-        throw new Error(`Error fetching models: ${response.statusText}`);
+        throw new Error(`API Error (${response.status}): ${responseText}`);
       }
       
-      const data = await response.json();
+      // Parse the response text as JSON
+      const data = JSON.parse(responseText);
       
       // Filter for chat models only and format them
       const chatModels = data.data
@@ -202,11 +208,15 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
       return chatModels;
     } catch (error) {
       console.error("Error fetching OpenAI models:", error);
+      
+      // Set both notification and detailed error
       setNotification({
-        message: error instanceof Error ? error.message : "Failed to fetch OpenAI models",
+        message: "Failed to fetch OpenAI models. See error details in settings panel.",
         type: "error",
         visible: true
       });
+      
+      setModelApiError(`OpenAI API Error: ${error instanceof Error ? error.message : String(error)}`);
       return [];
     } finally {
       setLoadingModels(false);
@@ -225,16 +235,20 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
     }
     
     setLoadingModels(true);
+    setModelApiError(""); // Clear previous errors
     
     try {
       // Use the Google AI models.list API endpoint
       const response = await fetch('https://generativelanguage.googleapis.com/v1/models?key=' + apiSettings.googleKey);
       
+      const responseText = await response.text();
+      
       if (!response.ok) {
-        throw new Error(`Error fetching models: ${response.statusText}`);
+        throw new Error(`API Error (${response.status}): ${responseText}`);
       }
       
-      const data = await response.json();
+      // Parse the response text as JSON
+      const data = JSON.parse(responseText);
       
       // Filter for Gemini models and format them
       const geminiModels = data.models
@@ -251,11 +265,15 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
       return geminiModels;
     } catch (error) {
       console.error("Error fetching Gemini models:", error);
+      
+      // Set both notification and detailed error
       setNotification({
-        message: error instanceof Error ? error.message : "Failed to fetch Gemini models",
+        message: "Failed to fetch Gemini models. See error details in settings panel.",
         type: "error",
         visible: true
       });
+      
+      setModelApiError(`Google AI API Error: ${error instanceof Error ? error.message : String(error)}`);
       
       // Return empty array to keep the input as free-form text
       return [];
@@ -288,6 +306,7 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
     
     setIsLoading(true);
     setNotification({ message: "Processing transactions...", type: "info", visible: true });
+    setCategorizationError(""); // Clear any previous errors
     
     // Apply current API settings immediately
     setApiConfig(apiSettings);
@@ -306,20 +325,36 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
               visible: true
             });
           } else {
+            // Display error message and store detailed error if available
             setNotification({
-              message: result.message,
+              message: "Error categorizing transactions. See details in settings panel.",
               type: "error",
               visible: true
             });
+            
+            if (result.errorDetails) {
+              setCategorizationError(result.errorDetails);
+              setShowSettings(true); // Show settings panel with error details
+            } else {
+              setCategorizationError(result.message || "Unknown error occurred");
+            }
           }
         });
       } catch (error) {
         console.error("Error in handleAutoCategorize:", error);
+        
+        // Create detailed error message
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+        const errorStack = error instanceof Error && error.stack ? error.stack : "";
+        
         setNotification({
-          message: error instanceof Error ? error.message : "An unknown error occurred",
+          message: "Error categorizing transactions. See details in settings panel.",
           type: "error",
           visible: true
         });
+        
+        setCategorizationError(`${errorMessage}\n\n${errorStack}`);
+        setShowSettings(true); // Show settings panel with error details
       } finally {
         setIsLoading(false);
       }
@@ -361,6 +396,27 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
           <Divider className={styles.divider}>
             <Text>API Settings</Text>
           </Divider>
+          
+          {(modelApiError || categorizationError) && (
+            <MessageBar 
+              className={styles.notification} 
+              intent="error"
+              style={{ 
+                marginBottom: '15px', 
+                whiteSpace: 'pre-wrap', 
+                overflowWrap: 'break-word',
+                maxHeight: '150px',
+                overflowY: 'auto'
+              }}
+            >
+              <div>
+                <strong>API Error Details:</strong>
+                <pre style={{ fontSize: '12px', margin: '8px 0' }}>
+                  {modelApiError || categorizationError}
+                </pre>
+              </div>
+            </MessageBar>
+          )}
           
           <RadioGroup
             value={apiSettings.provider}

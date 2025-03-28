@@ -75,6 +75,13 @@ interface SuggestedTransaction {
   category: string;
 }
 
+interface AIError {
+  message: string;
+  details: string;
+  source: 'api' | 'client';
+  statusCode?: number;
+}
+
 
 // Function to look up categories and descriptions using Gemini
 export async function lookupDescAndCategoryGemini(
@@ -161,7 +168,14 @@ export async function lookupDescAndCategoryGemini(
     return parsedResponse.suggested_transactions;
   } catch (error) {
     console.error("Error using Gemini API:", error);
-    return null;
+    
+    // Throw detailed error to be captured in the main function
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorDetails = error instanceof Error && error.stack ? error.stack : "";
+    
+    const enhancedError = new Error(`Gemini API Error: ${errorMessage}`);
+    enhancedError.stack = errorDetails;
+    throw enhancedError;
   }
 }
 
@@ -260,7 +274,14 @@ export async function lookupDescAndCategoryOpenAI(
     return parsedResponse.suggested_transactions;
   } catch (error) {
     console.error("Error using OpenAI API:", error);
-    return null;
+    
+    // Throw detailed error to be captured in the main function
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorDetails = error instanceof Error && error.stack ? error.stack : "";
+    
+    const enhancedError = new Error(`OpenAI API Error: ${errorMessage}`);
+    enhancedError.stack = errorDetails;
+    throw enhancedError;
   }
 }
 
@@ -458,9 +479,15 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     }
   } catch (error) {
     console.error("Error in categorizeUncategorizedTransactions:", error);
+    // Capture detailed error information
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    const errorStack = error instanceof Error && error.stack ? error.stack : "";
+    const errorDetails = `${errorMessage}\n\n${errorStack}`;
+    
     return { 
       success: false, 
-      message: error instanceof Error ? error.message : "Unknown error occurred" 
+      message: errorMessage,
+      errorDetails: errorDetails
     };
   }
 }
