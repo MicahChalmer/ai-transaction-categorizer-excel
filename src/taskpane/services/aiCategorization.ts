@@ -341,12 +341,17 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
       return { success: true, message: "No uncategorized transactions found" };
     }
     
-    // Get all categorized transactions for reference
+    // Load multiple ranges in parallel
     const allCategorizedRange = transactionsTable.getDataBodyRange().load("values");
-    await context.sync();
-    const allRows = allCategorizedRange.values;
+    const categoryColRange = categoriesTable.getDataBodyRange().load("values");
     
+    // Load all data with a single sync call
+    await context.sync();
+    
+    // Process categorized transactions
+    const allRows = allCategorizedRange.values;
     const categorizedTransactions: CategorizedTransaction[] = [];
+    
     for (const row of allRows) {
       if (row[origDescColIndex] && row[categoryColIndex]) {
         categorizedTransactions.push({
@@ -364,9 +369,7 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     const limitedReferenceTransactions = categorizedTransactions
       .slice(0, MAX_REFERENCE_TRANSACTIONS);
     
-    // Get allowed categories from Categories table
-    const categoryColRange = categoriesTable.getDataBodyRange().load("values");
-    await context.sync();
+    // Process categories
     const categoryValues = categoryColRange.values;
     
     const categoryList: string[] = categoryValues.map(row => row[0]).filter(Boolean);
@@ -392,28 +395,25 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
       return { success: false, message: "Failed to get suggestions from AI provider" };
     }
     
-    // Update the transactions with suggested values
-    for (let i = 0; i < suggestedTransactions.length; i++) {
-      const suggestion = suggestedTransactions[i];
-      const rowIndex = rowIndices[i];
+    // Use the existing rows array from earlier
+    
+    // Create a map for quick transaction lookup by ID
+    const transactionMap = new Map();
+    uncategorizedTransactions.forEach((tx, index) => {
+      transactionMap.set(tx.transaction_id, rowIndices[index]);
+    });
+    
+    // Update only the in-memory values array
+    let updatedCount = 0;
+    for (const suggestion of suggestedTransactions) {
+      const actualRowIndex = transactionMap.get(suggestion.transaction_id);
       
-      // Find row index in visible rows based on transaction ID
-      const rowIdx = uncategorizedTransactions.findIndex(
-        tx => tx.transaction_id === suggestion.transaction_id
-      );
-      
-      if (rowIdx !== -1) {
-        const actualRowIndex = rowIndices[rowIdx];
-        
+      if (actualRowIndex !== undefined) {
         // Validate category
         let category = suggestion.category;
         if (!categoryList.includes(category)) {
           category = FALLBACK_CATEGORY;
         }
-        
-        // Update the cells in the range
-        const dataBodyRange = transactionsTable.getDataBodyRange();
-        const rows = visibleRange.values;
         
         // Update the values in the array
         rows[actualRowIndex][descColIndex] = suggestion.updated_description;
@@ -421,18 +421,26 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
         
         // Update AI Touched column with current date/time if column exists
         if (aiTouchedColIndex !== -1) {
-          // Use Excel's native date/time representation (serial number)
-          // This lets Excel format the date according to the cell's format settings
           rows[actualRowIndex][aiTouchedColIndex] = new Date();
         }
         
-        // Write back to the range
-        visibleRange.values = rows;
+        updatedCount++;
       }
     }
     
-    await context.sync();
-    return { success: true, message: `Updated ${suggestedTransactions.length} transactions` };
+    // Batch update: write back to Excel just once
+    if (updatedCount > 0) {
+      // Set the values back to the visible range
+      visibleRange.values = rows;
+      
+      // Perform a sync to update the sheet
+      await context.sync();
+      
+      // Return success message with count of updated transactions
+      return { success: true, message: `Updated ${updatedCount} transactions` };
+    } else {
+      return { success: true, message: `No transactions needed updating` };
+    }
   } catch (error) {
     console.error("Error in categorizeUncategorizedTransactions:", error);
     return { 
