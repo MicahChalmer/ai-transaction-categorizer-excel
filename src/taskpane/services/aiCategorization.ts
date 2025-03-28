@@ -97,7 +97,7 @@ export async function lookupDescAndCategoryGemini(
       reference_transactions: categorizedTransactions,
     };
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: GPT_MODEL });
 
     const prompt = `
       Act as an API that categorizes and cleans up bank transaction descriptions for for a personal finance app. Respond with only JSON.

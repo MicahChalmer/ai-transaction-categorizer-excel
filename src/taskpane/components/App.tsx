@@ -25,7 +25,8 @@ const ENV = {
 // Default settings values
 const DEFAULT_SETTINGS = {
   provider: "gemini" as const,
-  model: "gpt-4o-mini",
+  openaiModel: "gpt-4o-mini",
+  geminiModel: "gemini-1.5-flash",
   maxBatchSize: 50,
   maxReferenceTransactions: 2000
 };
@@ -46,9 +47,15 @@ interface ApiSettings {
   openaiKey: string;
   googleKey: string;
   provider: 'gemini' | 'openai';
-  model: string;
+  openaiModel: string;
+  geminiModel: string;
   maxBatchSize: number;
   maxReferenceTransactions: number;
+}
+
+interface ModelOption {
+  id: string;
+  name: string;
 }
 
 const useStyles = makeStyles({
@@ -95,10 +102,16 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
     openaiKey: ENV.OPENAI_API_KEY || "",
     googleKey: ENV.GOOGLE_API_KEY || "",
     provider: DEFAULT_SETTINGS.provider,
-    model: DEFAULT_SETTINGS.model,
+    openaiModel: DEFAULT_SETTINGS.openaiModel,
+    geminiModel: DEFAULT_SETTINGS.geminiModel,
     maxBatchSize: DEFAULT_SETTINGS.maxBatchSize,
     maxReferenceTransactions: DEFAULT_SETTINGS.maxReferenceTransactions
   });
+  
+  // State for model options
+  const [openaiModels, setOpenaiModels] = useState<ModelOption[]>([]);
+  const [geminiModels, setGeminiModels] = useState<ModelOption[]>([]);
+  const [loadingModels, setLoadingModels] = useState<boolean>(false);
   
   const [showSettings, setShowSettings] = useState<boolean>(false);
   
@@ -109,7 +122,7 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
         openaiKey: ENV.OPENAI_API_KEY || "",
         googleKey: ENV.GOOGLE_API_KEY || "",
         provider: ENV.GOOGLE_API_KEY ? "gemini" : "openai",
-        model: apiSettings.model,
+        model: ENV.GOOGLE_API_KEY ? apiSettings.geminiModel : apiSettings.openaiModel,
         maxBatchSize: apiSettings.maxBatchSize,
         maxReferenceTransactions: apiSettings.maxReferenceTransactions
       });
@@ -117,20 +130,147 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
   }, []);
   
   const handleApiSettingChange = (field: keyof ApiSettings, value: string | number) => {
+    // Update the local state
     setApiSettings(prev => ({
       ...prev,
       [field]: value
     }));
+    
+    // Prepare the updated settings
+    const updatedSettings = {
+      ...apiSettings,
+      [field]: value
+    };
+    
+    // Get the correct model based on provider
+    const modelToUse = updatedSettings.provider === 'gemini' 
+      ? updatedSettings.geminiModel 
+      : updatedSettings.openaiModel;
     
     // Apply API settings
     setApiConfig({
       openaiKey: field === 'openaiKey' ? value as string : apiSettings.openaiKey,
       googleKey: field === 'googleKey' ? value as string : apiSettings.googleKey,
       provider: field === 'provider' ? value as 'gemini' | 'openai' : apiSettings.provider,
-      model: field === 'model' ? value as string : apiSettings.model,
+      model: modelToUse,
       maxBatchSize: field === 'maxBatchSize' ? value as number : apiSettings.maxBatchSize,
       maxReferenceTransactions: field === 'maxReferenceTransactions' ? value as number : apiSettings.maxReferenceTransactions
     });
+  };
+
+  // Function to fetch available models from OpenAI
+  const fetchOpenAIModels = async () => {
+    if (!apiSettings.openaiKey) {
+      setNotification({
+        message: "Please enter your OpenAI API key first",
+        type: "warning",
+        visible: true
+      });
+      return [];
+    }
+    
+    setLoadingModels(true);
+    
+    try {
+      // Create a simple fetch request to OpenAI models endpoint
+      const response = await fetch('https://api.openai.com/v1/models', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiSettings.openaiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error fetching models: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Filter for chat models only and format them
+      const chatModels = data.data
+        .filter((model: any) => 
+          (model.id.includes('gpt') && !model.id.includes('instruct')) || 
+          model.id.includes('claude')
+        )
+        .map((model: any) => ({
+          id: model.id,
+          name: model.id
+        }));
+      
+      setOpenaiModels(chatModels);
+      return chatModels;
+    } catch (error) {
+      console.error("Error fetching OpenAI models:", error);
+      setNotification({
+        message: error instanceof Error ? error.message : "Failed to fetch OpenAI models",
+        type: "error",
+        visible: true
+      });
+      return [];
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+  
+  // Function to fetch available models from Google
+  const fetchGeminiModels = async () => {
+    if (!apiSettings.googleKey) {
+      setNotification({
+        message: "Please enter your Google API key first",
+        type: "warning",
+        visible: true
+      });
+      return [];
+    }
+    
+    setLoadingModels(true);
+    
+    try {
+      // Use the Google AI models.list API endpoint
+      const response = await fetch('https://generativelanguage.googleapis.com/v1/models?key=' + apiSettings.googleKey);
+      
+      if (!response.ok) {
+        throw new Error(`Error fetching models: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Filter for Gemini models and format them
+      const geminiModels = data.models
+        .filter((model: any) => model.name.includes('gemini'))
+        .map((model: any) => {
+          const modelId = model.name.split('/').pop();
+          return {
+            id: modelId,
+            name: modelId.replace('gemini-', 'Gemini ').replace('-', ' ')
+          };
+        });
+      
+      setGeminiModels(geminiModels);
+      return geminiModels;
+    } catch (error) {
+      console.error("Error fetching Gemini models:", error);
+      setNotification({
+        message: error instanceof Error ? error.message : "Failed to fetch Gemini models",
+        type: "error",
+        visible: true
+      });
+      
+      // Return empty array to keep the input as free-form text
+      return [];
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+  
+  // Function to fetch models based on selected provider
+  const fetchModels = async () => {
+    if (apiSettings.provider === 'openai') {
+      return await fetchOpenAIModels();
+    } else {
+      return await fetchGeminiModels();
+    }
   };
 
   const handleAutoCategorize = async () => {
@@ -232,17 +372,49 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
           </RadioGroup>
           
           {apiSettings.provider === 'gemini' && (
-            <Field 
-              label="Google API Key" 
-              className={styles.apiKeyField}
-              validationMessage={!apiSettings.googleKey ? "Required" : undefined}
-            >
-              <Input 
-                type="password"
-                value={apiSettings.googleKey}
-                onChange={(_e, data) => handleApiSettingChange('googleKey', data.value)}
-              />
-            </Field>
+            <>
+              <Field 
+                label="Google API Key" 
+                className={styles.apiKeyField}
+                validationMessage={!apiSettings.googleKey ? "Required" : undefined}
+              >
+                <Input 
+                  type="password"
+                  value={apiSettings.googleKey}
+                  onChange={(_e, data) => handleApiSettingChange('googleKey', data.value)}
+                />
+              </Field>
+              
+              <Field label="Gemini Model" className={styles.apiKeyField}>
+                {geminiModels.length > 0 ? (
+                  <select
+                    style={{ width: '100%', padding: '8px' }}
+                    value={apiSettings.geminiModel}
+                    onChange={(e) => handleApiSettingChange('geminiModel', e.target.value)}
+                  >
+                    {geminiModels.map(model => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Input 
+                      value={apiSettings.geminiModel}
+                      onChange={(_e, data) => handleApiSettingChange('geminiModel', data.value)}
+                      style={{ flexGrow: 1 }}
+                    />
+                    <Button 
+                      onClick={fetchGeminiModels}
+                      disabled={loadingModels || !apiSettings.googleKey}
+                    >
+                      {loadingModels ? <Spinner size="tiny" /> : "Get Models"}
+                    </Button>
+                  </div>
+                )}
+              </Field>
+            </>
           )}
           
           {apiSettings.provider === 'openai' && (
@@ -260,10 +432,33 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
               </Field>
               
               <Field label="OpenAI Model" className={styles.apiKeyField}>
-                <Input 
-                  value={apiSettings.model}
-                  onChange={(_e, data) => handleApiSettingChange('model', data.value)}
-                />
+                {openaiModels.length > 0 ? (
+                  <select
+                    style={{ width: '100%', padding: '8px' }}
+                    value={apiSettings.openaiModel}
+                    onChange={(e) => handleApiSettingChange('openaiModel', e.target.value)}
+                  >
+                    {openaiModels.map(model => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Input 
+                      value={apiSettings.openaiModel}
+                      onChange={(_e, data) => handleApiSettingChange('openaiModel', data.value)}
+                      style={{ flexGrow: 1 }}
+                    />
+                    <Button 
+                      onClick={fetchOpenAIModels}
+                      disabled={loadingModels || !apiSettings.openaiKey}
+                    >
+                      {loadingModels ? <Spinner size="tiny" /> : "Get Models"}
+                    </Button>
+                  </div>
+                )}
               </Field>
             </>
           )}
