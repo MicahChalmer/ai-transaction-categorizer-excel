@@ -15,7 +15,12 @@ import {
 } from "@fluentui/react-components";
 import { Tag24Regular, Settings24Regular } from "@fluentui/react-icons";
 import { categorizeUncategorizedTransactions, setApiConfig } from "../services/aiCategorization";
-import { ENV } from "../taskpane";
+
+// Export environment variables for use in components
+const ENV = {
+  GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || '',
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || ''
+};
 
 interface AppProps {
   title: string;
