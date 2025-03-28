@@ -26,7 +26,7 @@ const ENV = {
 const DEFAULT_SETTINGS = {
   provider: "gemini" as const,
   openaiModel: "gpt-4o-mini",
-  geminiModel: "gemini-1.5-flash",
+  geminiModel: "gemini-2.0-flash",
   maxBatchSize: 50,
   maxReferenceTransactions: 2000
 };
