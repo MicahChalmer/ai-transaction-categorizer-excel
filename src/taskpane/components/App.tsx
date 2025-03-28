@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   makeStyles, 
   Button, 
@@ -15,6 +15,7 @@ import {
 } from "@fluentui/react-components";
 import { Tag24Regular, Settings24Regular } from "@fluentui/react-icons";
 import { categorizeUncategorizedTransactions, setApiConfig } from "../services/aiCategorization";
+import { ENV } from "../taskpane";
 
 interface AppProps {
   title: string;
@@ -76,13 +77,25 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
   });
   
   const [apiSettings, setApiSettings] = useState<ApiSettings>({
-    openaiKey: "",
-    googleKey: "",
+    openaiKey: ENV.OPENAI_API_KEY || "",
+    googleKey: ENV.GOOGLE_API_KEY || "",
     provider: "gemini",
     model: "gpt-4o-mini"
   });
   
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  
+  // Apply API settings on initial load
+  useEffect(() => {
+    if (ENV.GOOGLE_API_KEY || ENV.OPENAI_API_KEY) {
+      setApiConfig({
+        openaiKey: ENV.OPENAI_API_KEY || "",
+        googleKey: ENV.GOOGLE_API_KEY || "",
+        provider: ENV.GOOGLE_API_KEY ? "gemini" : "openai",
+        model: apiSettings.model
+      });
+    }
+  }, []);
   
   const handleApiSettingChange = (field: keyof ApiSettings, value: string) => {
     setApiSettings(prev => ({

@@ -1,4 +1,13 @@
-/* global Excel console */
+/* global Excel console process */
 
-// This file is currently empty as we've moved all functionality to the components and services
-// If we need to add any global Excel functionality, we can add it here
+// Import dotenv for environment variables
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
+
+// Export environment variables for use in components
+export const ENV = {
+  GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || '',
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || ''
+};
