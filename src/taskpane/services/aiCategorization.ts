@@ -395,16 +395,18 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
       return { success: false, message: "Failed to get suggestions from AI provider" };
     }
     
-    // Use the existing rows array from earlier
-    
     // Create a map for quick transaction lookup by ID
     const transactionMap = new Map();
     uncategorizedTransactions.forEach((tx, index) => {
       transactionMap.set(tx.transaction_id, rowIndices[index]);
     });
     
-    // Update only the in-memory values array
+    // Process suggestions and update cells directly
     let updatedCount = 0;
+    
+    // Create a collection of updates to apply
+    const updates: { row: number; values: { [key: number]: any } }[] = [];
+    
     for (const suggestion of suggestedTransactions) {
       const actualRowIndex = transactionMap.get(suggestion.transaction_id);
       
@@ -415,28 +417,41 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
           category = FALLBACK_CATEGORY;
         }
         
-        // Update the values in the array
-        rows[actualRowIndex][descColIndex] = suggestion.updated_description;
-        rows[actualRowIndex][categoryColIndex] = category;
+        // Collect updates for this row
+        const rowUpdate = {
+          row: actualRowIndex,
+          values: {} as { [key: number]: any }
+        };
         
-        // Update AI Touched column with current date/time if column exists
+        // Set only the columns we want to update
+        rowUpdate.values[descColIndex] = suggestion.updated_description;
+        rowUpdate.values[categoryColIndex] = category;
         if (aiTouchedColIndex !== -1) {
-          rows[actualRowIndex][aiTouchedColIndex] = new Date();
+          rowUpdate.values[aiTouchedColIndex] = new Date();
         }
         
+        updates.push(rowUpdate);
         updatedCount++;
       }
     }
     
-    // Batch update: write back to Excel just once
+    // Apply all updates
     if (updatedCount > 0) {
-      // Set the values back to the visible range
-      visibleRange.values = rows;
+      // Get the original body range for direct cell access
+      const dataBodyRange = transactionsTable.getDataBodyRange();
       
-      // Perform a sync to update the sheet
+      // Apply each update to individual cells
+      for (const update of updates) {
+        // For each column to update in this row
+        for (const [colIndex, value] of Object.entries(update.values)) {
+          // Use the row index directly, since update.row already refers to the position in rowIndices
+          const rowIdx = update.row;
+          const cell = dataBodyRange.getCell(rowIndices[rowIdx], parseInt(colIndex));
+          cell.values = [[value]];
+        }
+      }
+      
       await context.sync();
-      
-      // Return success message with count of updated transactions
       return { success: true, message: `Updated ${updatedCount} transactions` };
     } else {
       return { success: true, message: `No transactions needed updating` };
