@@ -22,6 +22,14 @@ const ENV = {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || ''
 };
 
+// Default settings values
+const DEFAULT_SETTINGS = {
+  provider: "gemini" as const,
+  model: "gpt-4o-mini",
+  maxBatchSize: 50,
+  maxReferenceTransactions: 2000
+};
+
 interface AppProps {
   title: string;
 }
@@ -86,10 +94,10 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
   const [apiSettings, setApiSettings] = useState<ApiSettings>({
     openaiKey: ENV.OPENAI_API_KEY || "",
     googleKey: ENV.GOOGLE_API_KEY || "",
-    provider: "gemini",
-    model: "gpt-4o-mini",
-    maxBatchSize: 50,
-    maxReferenceTransactions: 2000
+    provider: DEFAULT_SETTINGS.provider,
+    model: DEFAULT_SETTINGS.model,
+    maxBatchSize: DEFAULT_SETTINGS.maxBatchSize,
+    maxReferenceTransactions: DEFAULT_SETTINGS.maxReferenceTransactions
   });
   
   const [showSettings, setShowSettings] = useState<boolean>(false);
@@ -270,14 +278,12 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
             hint="Maximum number of transactions to categorize in one batch"
           >
             <Input 
-              type="number"
-              min="1"
-              max="1000"
+              type="text"
               value={apiSettings.maxBatchSize.toString()}
               onChange={(_e, data) => {
                 const value = parseInt(data.value);
-                if (!isNaN(value) && value > 0) {
-                  handleApiSettingChange('maxBatchSize', value);
+                if (!isNaN(value)) {
+                  handleApiSettingChange('maxBatchSize', value || DEFAULT_SETTINGS.maxBatchSize);
                 }
               }}
             />
@@ -289,14 +295,12 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
             hint="Maximum number of previously categorized transactions to use as reference"
           >
             <Input 
-              type="number"
-              min="100"
-              max="5000"
+              type="text"
               value={apiSettings.maxReferenceTransactions.toString()}
               onChange={(_e, data) => {
                 const value = parseInt(data.value);
-                if (!isNaN(value) && value >= 100) {
-                  handleApiSettingChange('maxReferenceTransactions', value);
+                if (!isNaN(value)) {
+                  handleApiSettingChange('maxReferenceTransactions', value || DEFAULT_SETTINGS.maxReferenceTransactions);
                 }
               }}
             />
