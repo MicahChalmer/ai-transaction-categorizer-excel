@@ -50,14 +50,16 @@ const MAX_BATCH_SIZE = 50;
 interface Transaction {
   transaction_id: string;
   original_description: string;
-  previous_transactions: PreviousTransaction[];
+  amount?: number;
+  date?: string;
 }
 
-interface PreviousTransaction {
+interface CategorizedTransaction {
   original_description: string;
   updated_description: string;
   category: string;
   amount: number;
+  date?: string;
 }
 
 interface SuggestedTransaction {
@@ -66,46 +68,12 @@ interface SuggestedTransaction {
   category: string;
 }
 
-// Function to find similar transactions (simplified for Excel version)
-export async function findSimilarTransactions(
-  categorizedTransactions: any[],
-  originalDescription: string
-): Promise<PreviousTransaction[]> {
-  const similarTransactions: PreviousTransaction[] = [];
-  const limit = 3;
-  
-  // Simple text similarity for demo purposes - in production, implement TF-IDF or similar algorithm
-  for (const row of categorizedTransactions) {
-    const rowOrigDesc = row[0];
-    const rowDesc = row[1];
-    const rowCategory = row[2];
-    const rowAmount = parseFloat(row[3] || "0");
-    
-    // Simple similarity check (substring match)
-    if (rowOrigDesc && 
-        rowOrigDesc.toString().toLowerCase().includes(originalDescription.toLowerCase().substring(0, 10)) &&
-        rowCategory) {
-      similarTransactions.push({
-        original_description: rowOrigDesc,
-        updated_description: rowDesc || rowOrigDesc,
-        category: rowCategory,
-        amount: rowAmount
-      });
-      
-      // Return once we have enough similar transactions
-      if (similarTransactions.length >= limit) {
-        break;
-      }
-    }
-  }
-  
-  return similarTransactions;
-}
 
 // Function to look up categories and descriptions using Gemini
 export async function lookupDescAndCategoryGemini(
   transactionList: Transaction[],
-  categoryList: string[]
+  categoryList: string[],
+  categorizedTransactions: CategorizedTransaction[]
 ): Promise<SuggestedTransaction[] | null> {
   if (!GOOGLE_API_KEY) {
     throw new Error("Google API key not found. Please set it in the settings panel.");
@@ -119,6 +87,7 @@ export async function lookupDescAndCategoryGemini(
 
     const transactionDict = {
       transactions: transactionList,
+      reference_transactions: categorizedTransactions,
     };
 
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -129,20 +98,27 @@ export async function lookupDescAndCategoryGemini(
       Reference the following list of allowed_categories:
       ${JSON.stringify(categoryList)}
 
-      You will be given JSON input with a list of transaction descriptions and potentially related previously categorized transactions in the following format:
+      You will be given JSON input with a list of uncategorized transactions and a set of previously categorized reference transactions in the following format:
           {"transactions": [
             {
               "transaction_id": "A unique ID for this transaction"
-              "original_description": "The original raw transaction description",
-              "previous_transactions": "(optional) Previously cleaned up transaction descriptions and the prior 
-              category used that may be related to this transaction
+              "original_description": "The original raw transaction description"
+            }
+          ],
+          "reference_transactions": [
+            {
+              "original_description": "The original description of a previously categorized transaction",
+              "updated_description": "The cleaned up description used previously",
+              "category": "The category that was previously assigned",
+              "amount": "The amount of the transaction"
             }
           ]}
-          For each transaction provided, follow these instructions:
-          (0) If previous_transactions were provided, see if the current transaction matches a previous one closely.
-              If it does, use the updated_description and category of the previous transaction exactly,
-              including capitalization and punctuation.
-          (1) If there is no matching previous_transaction, or none was provided suggest a better "updated_description" according to the following rules:
+          
+          For each transaction in the transactions list, follow these instructions:
+          (0) First check if there are any similar transactions in the reference_transactions list.
+              If you find similar transactions, use the same category and a similar updated_description.
+              Match transactions based on merchant name, description patterns, and similar text.
+          (1) If there are no similar reference transactions, suggest a better "updated_description" according to the following rules:
           (a) Use all of your knowledge and information to propose a friendly, human readable updated_description for the
             transaction given the original_description. The input often contains the name of a merchant name.
             If you know of a merchant it might be referring to, use the name of that merchant for the suggested description.
@@ -185,7 +161,8 @@ export async function lookupDescAndCategoryGemini(
 // Function to look up categories and descriptions using OpenAI
 export async function lookupDescAndCategoryOpenAI(
   transactionList: Transaction[],
-  categoryList: string[]
+  categoryList: string[],
+  categorizedTransactions: CategorizedTransaction[]
 ): Promise<SuggestedTransaction[] | null> {
   if (!OPENAI_API_KEY) {
     throw new Error("OpenAI API key not found. Please set it in the settings panel.");
@@ -202,6 +179,7 @@ export async function lookupDescAndCategoryOpenAI(
 
     const transactionDict = {
       transactions: transactionList,
+      reference_transactions: categorizedTransactions,
     };
 
     const completion = await openai.chat.completions.create({
@@ -221,21 +199,27 @@ export async function lookupDescAndCategoryOpenAI(
         },
         {
           role: "system",
-          content: `You will be given JSON input with a list of transaction descriptions and potentially related previously categorized transactions in the following format: 
+          content: `You will be given JSON input with a list of uncategorized transactions and a set of previously categorized reference transactions in the following format:
             {"transactions": [
               {
                 "transaction_id": "A unique ID for this transaction"
-                "original_description": "The original raw transaction description",
-                "previous_transactions": "(optional) Previously cleaned up transaction descriptions and the prior 
-                category used that may be related to this transaction
+                "original_description": "The original raw transaction description"
+              }
+            ],
+            "reference_transactions": [
+              {
+                "original_description": "The original description of a previously categorized transaction",
+                "updated_description": "The cleaned up description used previously",
+                "category": "The category that was previously assigned",
+                "amount": "The amount of the transaction"
               }
             ]}
-
-            For each transaction provided, follow these instructions:
-            (0) If previous_transactions were provided, see if the current transaction matches a previous one closely. 
-                If it does, use the updated_description and category of the previous transaction exactly, 
-                including capitalization and punctuation.
-            (1) If there is no matching previous_transaction, or none was provided suggest a better "updated_description" according to the following rules:
+            
+            For each transaction in the transactions list, follow these instructions:
+            (0) First check if there are any similar transactions in the reference_transactions list.
+                If you find similar transactions, use the same category and a similar updated_description.
+                Match transactions based on merchant name, description patterns, and similar text.
+            (1) If there are no similar reference transactions, suggest a better "updated_description" according to the following rules:
             (a) Use all of your knowledge and information to propose a friendly, human readable updated_description for the 
               transaction given the original_description. The input often contains the name of a merchant name. 
               If you know of a merchant it might be referring to, use the name of that merchant for the suggested description.
@@ -328,10 +312,14 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
       const category = row[categoryColIndex];
       
       if (origDesc && !category) {
+        const amount = parseFloat(row[headers.indexOf(AMOUNT_COL_NAME)] || "0");
+        const date = row[headers.indexOf(DATE_COL_NAME)];
+        
         uncategorizedTransactions.push({
           transaction_id: row[idColIndex] || `row-${i}`,
           original_description: origDesc,
-          previous_transactions: [] // Will fill this later
+          amount: amount,
+          date: date
         });
         rowIndices.push(i);
         
@@ -346,32 +334,28 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
       return { success: true, message: "No uncategorized transactions found" };
     }
     
-    // Get all categorized transactions for similarity comparison
+    // Get all categorized transactions for reference
     const allCategorizedRange = transactionsTable.getDataBodyRange().load("values");
     await context.sync();
     const allRows = allCategorizedRange.values;
     
-    const categorizedTransactions: any[] = [];
+    const categorizedTransactions: CategorizedTransaction[] = [];
     for (const row of allRows) {
       if (row[origDescColIndex] && row[categoryColIndex]) {
-        categorizedTransactions.push([
-          row[origDescColIndex],
-          row[descColIndex],
-          row[categoryColIndex],
-          row[headers.indexOf(AMOUNT_COL_NAME)] || "0"
-        ]);
+        categorizedTransactions.push({
+          original_description: row[origDescColIndex],
+          updated_description: row[descColIndex] || row[origDescColIndex],
+          category: row[categoryColIndex],
+          amount: parseFloat(row[headers.indexOf(AMOUNT_COL_NAME)] || "0"),
+          date: row[headers.indexOf(DATE_COL_NAME)]
+        });
       }
     }
     
-    // For each uncategorized transaction, find similar transactions
-    // Use Promise.all to process all transactions in parallel
-    await Promise.all(uncategorizedTransactions.map(async (transaction, index) => {
-      const similarTransactions = await findSimilarTransactions(
-        categorizedTransactions,
-        transaction.original_description
-      );
-      uncategorizedTransactions[index].previous_transactions = similarTransactions;
-    }));
+    // Limit the number of reference transactions to avoid too large requests
+    // Sort by most recent first and take the first 100
+    const limitedReferenceTransactions = categorizedTransactions
+      .slice(0, 100);
     
     // Get allowed categories from Categories table
     const categoryColRange = categoriesTable.getDataBodyRange().load("values");
@@ -386,12 +370,14 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     if (AI_PROVIDER === 'gemini') {
       suggestedTransactions = await lookupDescAndCategoryGemini(
         uncategorizedTransactions,
-        categoryList
+        categoryList,
+        limitedReferenceTransactions
       );
     } else {
       suggestedTransactions = await lookupDescAndCategoryOpenAI(
         uncategorizedTransactions,
-        categoryList
+        categoryList,
+        limitedReferenceTransactions
       );
     }
     
