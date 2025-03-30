@@ -12,9 +12,10 @@ import {
   RadioGroup,
   Divider,
   Field,
-  Checkbox
+  Checkbox,
+  Tooltip
 } from "@fluentui/react-components";
-import { Tag24Regular, Settings24Regular, BugRegular } from "@fluentui/react-icons";
+import { Tag24Regular, Settings24Regular, BugRegular, CopyRegular } from "@fluentui/react-icons";
 import { 
   categorizeUncategorizedTransactions, 
   setApiConfig, 
@@ -135,6 +136,24 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
     const interaction = getLastApiInteraction();
     setApiInteraction(interaction);
     setShowApiDebug(true);
+  };
+  
+  // Copy text to clipboard
+  const [copyTooltip, setCopyTooltip] = useState("Copy to clipboard");
+  
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopyTooltip("Copied!");
+      setTimeout(() => setCopyTooltip("Copy to clipboard"), 2000);
+    });
+  };
+  
+  // Format API response to remove markdown code blocks
+  const formatApiResponse = (response: string): string => {
+    if (!response) return "";
+    
+    // Remove markdown code block delimiters
+    return response.replace(/```json\s*|\s*```/g, "");
   };
   
   // Apply API settings on initial load
@@ -449,7 +468,19 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
             <Text weight="semibold">Timestamp:</Text> {apiInteraction.timestamp}
           </div>
           
-          <Divider style={{ margin: '10px 0' }}>Request</Divider>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '10px 0' }}>
+            <Divider style={{ flexGrow: 1 }}>Request</Divider>
+            <Tooltip content={copyTooltip} relationship="label">
+              <Button 
+                icon={<CopyRegular />} 
+                appearance="subtle"
+                size="small"
+                onClick={() => copyToClipboard(JSON.stringify(apiInteraction.request, null, 2))}
+                style={{ marginLeft: '10px' }}
+              />
+            </Tooltip>
+          </div>
+          
           <div style={{ 
             maxHeight: '200px', 
             overflow: 'auto', 
@@ -464,7 +495,26 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
             </pre>
           </div>
           
-          <Divider style={{ margin: '10px 0' }}>Response</Divider>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '10px 0' }}>
+            <Divider style={{ flexGrow: 1 }}>Response</Divider>
+            <Tooltip content={copyTooltip} relationship="label">
+              <Button 
+                icon={<CopyRegular />} 
+                appearance="subtle"
+                size="small"
+                onClick={() => {
+                  const content = apiInteraction.error 
+                    ? JSON.stringify(apiInteraction.error, null, 2)
+                    : apiInteraction.response 
+                      ? formatApiResponse(apiInteraction.response) 
+                      : "";
+                  copyToClipboard(content);
+                }}
+                style={{ marginLeft: '10px' }}
+              />
+            </Tooltip>
+          </div>
+          
           <div style={{ 
             maxHeight: '200px', 
             overflow: 'auto', 
@@ -476,7 +526,7 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
             <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
               {apiInteraction.error ? 
                 JSON.stringify(apiInteraction.error, null, 2) : 
-                apiInteraction.response
+                apiInteraction.response ? formatApiResponse(apiInteraction.response) : ""
               }
             </pre>
           </div>
