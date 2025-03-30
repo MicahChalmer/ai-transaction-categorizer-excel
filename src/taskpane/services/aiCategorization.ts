@@ -16,6 +16,21 @@ let MAX_REFERENCE_TRANSACTIONS = 2000; // Max number of reference transactions t
 // Content Settings
 let UPDATE_DESCRIPTIONS = false; // Whether to update transaction descriptions or just categories
 
+// Debugging - API interaction logs
+export interface ApiInteraction {
+  timestamp: string;
+  provider: string;
+  request: any;
+  response?: any;
+  error?: any;
+}
+
+let lastApiInteraction: ApiInteraction | null = null;
+
+export function getLastApiInteraction(): ApiInteraction | null {
+  return lastApiInteraction;
+}
+
 // API clients - initialized on-demand when keys are available
 let openai: OpenAI | null = null;
 let genAI: GoogleGenerativeAI | null = null;
@@ -110,6 +125,12 @@ export async function lookupDescAndCategoryGemini(
     };
 
     const model = genAI.getGenerativeModel({ model: GPT_MODEL });
+    
+    // Record API request for debugging
+    const apiRequest = {
+      model: GPT_MODEL,
+      data: transactionDict
+    };
 
     const prompt = `
       Act as an API that categorizes and cleans up bank transaction descriptions for for a personal finance app. Respond with only JSON.
@@ -155,22 +176,50 @@ export async function lookupDescAndCategoryGemini(
           ]}
     `;
 
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: JSON.stringify(transactionDict) }] }],
-      systemInstruction: prompt,
-    });
-
-    const response = result.response;
-    const text = response.text();
-    
-    // Extract JSON from the response 
-    const jsonStart = text.indexOf("{");
-    const jsonEnd = text.lastIndexOf("}") + 1; 
-    const jsonText = text.substring(jsonStart, jsonEnd);
-    
-    // Parse the JSON response
-    const parsedResponse = JSON.parse(jsonText);
-    return parsedResponse.suggested_transactions;
+    try {
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: JSON.stringify(transactionDict) }] }],
+        systemInstruction: prompt,
+      });
+  
+      const response = result.response;
+      const text = response.text();
+      
+      // Extract JSON from the response 
+      const jsonStart = text.indexOf("{");
+      const jsonEnd = text.lastIndexOf("}") + 1; 
+      const jsonText = text.substring(jsonStart, jsonEnd);
+      
+      // Record API interaction
+      lastApiInteraction = {
+        timestamp: new Date().toISOString(),
+        provider: 'Gemini',
+        request: {
+          model: GPT_MODEL,
+          prompt: prompt,
+          data: transactionDict
+        },
+        response: text
+      };
+      
+      // Parse the JSON response
+      const parsedResponse = JSON.parse(jsonText);
+      return parsedResponse.suggested_transactions;
+    } catch (error) {
+      // Record API error
+      lastApiInteraction = {
+        timestamp: new Date().toISOString(),
+        provider: 'Gemini',
+        request: {
+          model: GPT_MODEL,
+          prompt: prompt, 
+          data: transactionDict
+        },
+        response: null,
+        error: error instanceof Error ? { message: error.message, stack: error.stack } : error
+      };
+      throw error;
+    }
   } catch (error) {
     console.error("Error using Gemini API:", error);
     
@@ -208,24 +257,34 @@ export async function lookupDescAndCategoryOpenAI(
       reference_transactions: categorizedTransactions,
     };
 
-    const completion = await openai.chat.completions.create({
+    // Record API request for debugging
+    const apiRequest = {
       model: GPT_MODEL,
       temperature: 0.2,
       top_p: 0.1,
       seed: 1,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: "Act as an API that categorizes and cleans up bank transaction descriptions for for a personal finance app.",
-        },
-        {
-          role: "system",
-          content: "Reference the following list of allowed_categories:\n" + JSON.stringify(categoryList),
-        },
-        {
-          role: "system",
-          content: `You will be given JSON input with a list of uncategorized transactions and a set of previously categorized reference transactions in the following format:
+      data: transactionDict
+    };
+    
+    try {
+      const completion = await openai.chat.completions.create({
+        model: GPT_MODEL,
+        temperature: 0.2,
+        top_p: 0.1,
+        seed: 1,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: "Act as an API that categorizes and cleans up bank transaction descriptions for for a personal finance app.",
+          },
+          {
+            role: "system",
+            content: "Reference the following list of allowed_categories:\n" + JSON.stringify(categoryList),
+          },
+          {
+            role: "system",
+            content: `You will be given JSON input with a list of uncategorized transactions and a set of previously categorized reference transactions in the following format:
             {"transactions": [
               {
                 "transaction_id": "A unique ID for this transaction"
@@ -270,13 +329,44 @@ export async function lookupDescAndCategoryOpenAI(
       ],
     });
 
-    const response = completion.choices[0].message.content;
-    if (!response) {
-      throw new Error("No response from OpenAI API");
+      const response = completion.choices[0].message.content;
+      if (!response) {
+        throw new Error("No response from OpenAI API");
+      }
+      
+      // Record API interaction
+      lastApiInteraction = {
+        timestamp: new Date().toISOString(),
+        provider: 'OpenAI',
+        request: {
+          model: GPT_MODEL,
+          temperature: 0.2,
+          top_p: 0.1,
+          seed: 1,
+          data: transactionDict
+        },
+        response: response
+      };
+      
+      const parsedResponse = JSON.parse(response);
+      return parsedResponse.suggested_transactions;
+    } catch (error) {
+      // Record API error
+      lastApiInteraction = {
+        timestamp: new Date().toISOString(),
+        provider: 'OpenAI',
+        request: {
+          model: GPT_MODEL,
+          temperature: 0.2,
+          top_p: 0.1,
+          seed: 1,
+          data: transactionDict
+        },
+        response: null,
+        error: error instanceof Error ? { message: error.message, stack: error.stack } : error
+      };
+      throw error;
     }
-    
-    const parsedResponse = JSON.parse(response);
-    return parsedResponse.suggested_transactions;
   } catch (error) {
     console.error("Error using OpenAI API:", error);
     

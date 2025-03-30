@@ -14,8 +14,13 @@ import {
   Field,
   Checkbox
 } from "@fluentui/react-components";
-import { Tag24Regular, Settings24Regular } from "@fluentui/react-icons";
-import { categorizeUncategorizedTransactions, setApiConfig } from "../services/aiCategorization";
+import { Tag24Regular, Settings24Regular, BugRegular } from "@fluentui/react-icons";
+import { 
+  categorizeUncategorizedTransactions, 
+  setApiConfig, 
+  getLastApiInteraction,
+  ApiInteraction 
+} from "../services/aiCategorization";
 
 // Export environment variables for use in components
 const ENV = {
@@ -120,6 +125,17 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
   
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [categorizationError, setCategorizationError] = useState<string>("");
+  
+  // Debug panel for API interactions
+  const [showApiDebug, setShowApiDebug] = useState<boolean>(false);
+  const [apiInteraction, setApiInteraction] = useState<ApiInteraction | null>(null);
+  
+  // Function to show API debug panel
+  const showLastApiInteraction = () => {
+    const interaction = getLastApiInteraction();
+    setApiInteraction(interaction);
+    setShowApiDebug(true);
+  };
   
   // Apply API settings on initial load
   useEffect(() => {
@@ -387,15 +403,85 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
           {isLoading ? <Spinner size="tiny" /> : "AI Auto-Categorize"}
         </Button>
         
-        <Button 
-          style={{ marginTop: '10px' }}
-          appearance="subtle"
-          icon={<Settings24Regular />}
-          onClick={() => setShowSettings(!showSettings)}
-        >
-          Settings
-        </Button>
+        <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+          <Button 
+            appearance="subtle"
+            icon={<Settings24Regular />}
+            onClick={() => {
+              setShowSettings(!showSettings);
+              setShowApiDebug(false);
+            }}
+          >
+            Settings
+          </Button>
+          
+          <Button 
+            appearance="subtle"
+            icon={<BugRegular />}
+            onClick={showLastApiInteraction}
+            disabled={!getLastApiInteraction()}
+            title="Show last API interaction"
+          >
+            Debug
+          </Button>
+        </div>
       </div>
+      
+      {showApiDebug && apiInteraction && (
+        <div className={styles.settingsContainer}>
+          <Divider className={styles.divider}>
+            <Text>API Debug Information</Text>
+            <Button
+              appearance="subtle"
+              size="small"
+              style={{ marginLeft: '10px' }}
+              onClick={() => setShowApiDebug(false)}
+            >
+              Close
+            </Button>
+          </Divider>
+          
+          <div style={{ marginBottom: '10px' }}>
+            <Text weight="semibold">Provider:</Text> {apiInteraction.provider}
+          </div>
+          
+          <div style={{ marginBottom: '10px' }}>
+            <Text weight="semibold">Timestamp:</Text> {apiInteraction.timestamp}
+          </div>
+          
+          <Divider style={{ margin: '10px 0' }}>Request</Divider>
+          <div style={{ 
+            maxHeight: '200px', 
+            overflow: 'auto', 
+            border: '1px solid #ccc', 
+            padding: '10px',
+            background: '#f5f5f5',
+            borderRadius: '4px',
+            marginBottom: '20px'
+          }}>
+            <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+              {JSON.stringify(apiInteraction.request, null, 2)}
+            </pre>
+          </div>
+          
+          <Divider style={{ margin: '10px 0' }}>Response</Divider>
+          <div style={{ 
+            maxHeight: '200px', 
+            overflow: 'auto', 
+            border: '1px solid #ccc', 
+            padding: '10px',
+            background: '#f5f5f5',
+            borderRadius: '4px'
+          }}>
+            <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+              {apiInteraction.error ? 
+                JSON.stringify(apiInteraction.error, null, 2) : 
+                apiInteraction.response
+              }
+            </pre>
+          </div>
+        </div>
+      )}
       
       {showSettings && (
         <div className={styles.settingsContainer}>
