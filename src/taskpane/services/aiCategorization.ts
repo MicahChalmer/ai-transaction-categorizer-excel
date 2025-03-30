@@ -71,6 +71,55 @@ const AI_TOUCHED_COL_NAME = "AI Touched";
 // Fallback Transaction Category
 const FALLBACK_CATEGORY = "To Be Categorized";
 
+// Prompting
+// Shared prompt template for both APIs
+function generateCategorizePrompt(categoryList: string[]): string {
+  return `
+    Act as an API that categorizes and cleans up bank transaction descriptions for for a personal finance app. Respond with only JSON.
+
+    Reference the following list of allowed_categories:
+    ${JSON.stringify(categoryList)}
+
+    You will be given JSON input with a list of uncategorized transactions and a set of previously categorized reference transactions in the following format:
+        {"transactions": [
+          {
+            "transaction_id": "A unique ID for this transaction"
+            "original_description": "The original raw transaction description"
+          }
+        ],
+        "reference_transactions": [
+          {
+            "original_description": "The original description of a previously categorized transaction",
+            "updated_description": "The cleaned up description used previously",
+            "category": "The category that was previously assigned",
+            "amount": "The amount of the transaction"
+          }
+        ]}
+        
+        For each transaction in the transactions list, follow these instructions:
+        (0) First check if there are any similar transactions in the reference_transactions list.
+            If you find similar transactions, use the same category and a similar updated_description.
+            Match transactions based on merchant name, description patterns, and similar text.
+        (1) If there are no similar reference transactions, suggest a better "updated_description" according to the following rules:
+        (a) Use all of your knowledge and information to propose a friendly, human readable updated_description for the
+          transaction given the original_description. The input often contains the name of a merchant name.
+          If you know of a merchant it might be referring to, use the name of that merchant for the suggested description.
+        (b) Keep the suggested description as simple as possible. Remove punctuation, extraneous
+          numbers, location information, abbreviations such as "Inc." or "LLC", IDs and account numbers.
+        (2) For each original_description, suggest a "category" for the transaction from the allowed_categories list that was provided.
+        (3) If you are not confident in the suggested category after using your own knowledge and the previous transactions provided, use the cateogry "${FALLBACK_CATEGORY}"
+
+        (4) Your response should be a JSON object and no other text.  The response object should be of the form:
+        {"suggested_transactions": [
+          {
+            "transaction_id": "The unique ID previously provided for this transaction",
+            "updated_description": "The cleaned up version of the description",
+            "category": "A category selected from the allowed_categories list"
+          }
+        ]}
+  `;
+}
+
 // Other Parameters
 
 // Transaction interfaces
@@ -126,55 +175,15 @@ export async function lookupDescAndCategoryGemini(
 
     const model = genAI.getGenerativeModel({ model: GPT_MODEL });
     
+    // Get the shared prompt
+    const prompt = generateCategorizePrompt(categoryList);
+    
     // Record API request for debugging
     const apiRequest = {
       model: GPT_MODEL,
+      prompt: prompt,
       data: transactionDict
     };
-
-    const prompt = `
-      Act as an API that categorizes and cleans up bank transaction descriptions for for a personal finance app. Respond with only JSON.
-
-      Reference the following list of allowed_categories:
-      ${JSON.stringify(categoryList)}
-
-      You will be given JSON input with a list of uncategorized transactions and a set of previously categorized reference transactions in the following format:
-          {"transactions": [
-            {
-              "transaction_id": "A unique ID for this transaction"
-              "original_description": "The original raw transaction description"
-            }
-          ],
-          "reference_transactions": [
-            {
-              "original_description": "The original description of a previously categorized transaction",
-              "updated_description": "The cleaned up description used previously",
-              "category": "The category that was previously assigned",
-              "amount": "The amount of the transaction"
-            }
-          ]}
-          
-          For each transaction in the transactions list, follow these instructions:
-          (0) First check if there are any similar transactions in the reference_transactions list.
-              If you find similar transactions, use the same category and a similar updated_description.
-              Match transactions based on merchant name, description patterns, and similar text.
-          (1) If there are no similar reference transactions, suggest a better "updated_description" according to the following rules:
-          (a) Use all of your knowledge and information to propose a friendly, human readable updated_description for the
-            transaction given the original_description. The input often contains the name of a merchant name.
-            If you know of a merchant it might be referring to, use the name of that merchant for the suggested description.
-          (b) Keep the suggested description as simple as possible. Remove punctuation, extraneous
-            numbers, location information, abbreviations such as "Inc." or "LLC", IDs and account numbers.
-          (2) For each original_description, suggest a "category" for the transaction from the allowed_categories list that was provided.
-          (3) If you are not confident in the suggested category after using your own knowledge and the previous transactions provided, use the cateogry "${FALLBACK_CATEGORY}"
-          (4) Your response should be a JSON object and no other text.  The response object should be of the form:
-          {"suggested_transactions": [
-            {
-              "transaction_id": "The unique ID previously provided for this transaction",
-              "updated_description": "The cleaned up version of the description",
-              "category": "A category selected from the allowed_categories list"
-            }
-          ]}
-    `;
 
     try {
       const result = await model.generateContent({
@@ -267,6 +276,9 @@ export async function lookupDescAndCategoryOpenAI(
     };
     
     try {
+      // Get the shared prompt
+      const prompt = generateCategorizePrompt(categoryList);
+      
       const completion = await openai.chat.completions.create({
         model: GPT_MODEL,
         temperature: 0.2,
@@ -276,58 +288,14 @@ export async function lookupDescAndCategoryOpenAI(
         messages: [
           {
             role: "system",
-            content: "Act as an API that categorizes and cleans up bank transaction descriptions for for a personal finance app.",
+            content: prompt
           },
           {
-            role: "system",
-            content: "Reference the following list of allowed_categories:\n" + JSON.stringify(categoryList),
-          },
-          {
-            role: "system",
-            content: `You will be given JSON input with a list of uncategorized transactions and a set of previously categorized reference transactions in the following format:
-            {"transactions": [
-              {
-                "transaction_id": "A unique ID for this transaction"
-                "original_description": "The original raw transaction description"
-              }
-            ],
-            "reference_transactions": [
-              {
-                "original_description": "The original description of a previously categorized transaction",
-                "updated_description": "The cleaned up description used previously",
-                "category": "The category that was previously assigned",
-                "amount": "The amount of the transaction"
-              }
-            ]}
-            
-            For each transaction in the transactions list, follow these instructions:
-            (0) First check if there are any similar transactions in the reference_transactions list.
-                If you find similar transactions, use the same category and a similar updated_description.
-                Match transactions based on merchant name, description patterns, and similar text.
-            (1) If there are no similar reference transactions, suggest a better "updated_description" according to the following rules:
-            (a) Use all of your knowledge and information to propose a friendly, human readable updated_description for the 
-              transaction given the original_description. The input often contains the name of a merchant name. 
-              If you know of a merchant it might be referring to, use the name of that merchant for the suggested description.
-            (b) Keep the suggested description as simple as possible. Remove punctuation, extraneous 
-              numbers, location information, abbreviations such as "Inc." or "LLC", IDs and account numbers.
-            (2) For each original_description, suggest a "category" for the transaction from the allowed_categories list that was provided.
-            (3) If you are not confident in the suggested category after using your own knowledge and the previous transactions provided, use the cateogry "${FALLBACK_CATEGORY}"
-
-            (4) Your response should be a JSON object and no other text.  The response object should be of the form:
-            {"suggested_transactions": [
-              {
-                "transaction_id": "The unique ID previously provided for this transaction",
-                "updated_description": "The cleaned up version of the description",
-                "category": "A category selected from the allowed_categories list"
-              }
-            ]}`,
-        },
-        {
-          role: "user",
-          content: JSON.stringify(transactionDict),
-        },
-      ],
-    });
+            role: "user",
+            content: JSON.stringify(transactionDict),
+          }
+        ]
+      });
 
       const response = completion.choices[0].message.content;
       if (!response) {
@@ -343,6 +311,7 @@ export async function lookupDescAndCategoryOpenAI(
           temperature: 0.2,
           top_p: 0.1,
           seed: 1,
+          prompt: prompt,
           data: transactionDict
         },
         response: response
@@ -360,6 +329,7 @@ export async function lookupDescAndCategoryOpenAI(
           temperature: 0.2,
           top_p: 0.1,
           seed: 1,
+          prompt: generateCategorizePrompt(categoryList),
           data: transactionDict
         },
         response: null,
