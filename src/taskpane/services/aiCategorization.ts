@@ -13,6 +13,9 @@ let GPT_MODEL = 'gpt-4o-mini'; // Can be any openai model designator
 let MAX_BATCH_SIZE = 50; // Max number of transactions to categorize in one batch
 let MAX_REFERENCE_TRANSACTIONS = 2000; // Max number of reference transactions to include
 
+// Content Settings
+let UPDATE_DESCRIPTIONS = false; // Whether to update transaction descriptions or just categories
+
 // API clients - initialized on-demand when keys are available
 let openai: OpenAI | null = null;
 let genAI: GoogleGenerativeAI | null = null;
@@ -25,6 +28,7 @@ export function setApiConfig(config: {
   model?: string;
   maxBatchSize?: number;
   maxReferenceTransactions?: number;
+  updateDescriptions?: boolean;
 }) {
   // Update keys and settings
   if (config.openaiKey) OPENAI_API_KEY = config.openaiKey;
@@ -33,6 +37,7 @@ export function setApiConfig(config: {
   if (config.model) GPT_MODEL = config.model;
   if (config.maxBatchSize) MAX_BATCH_SIZE = config.maxBatchSize;
   if (config.maxReferenceTransactions) MAX_REFERENCE_TRANSACTIONS = config.maxReferenceTransactions;
+  if (config.updateDescriptions !== undefined) UPDATE_DESCRIPTIONS = config.updateDescriptions;
   
   // Reset clients so they'll be re-initialized with new keys when needed
   openai = null;
@@ -370,18 +375,21 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     await context.sync();
     
     // Process categorized transactions
-    const allRows = allCategorizedRange.values;
+    const allRows = allCategorizedRange.values || [];
     const categorizedTransactions: CategorizedTransaction[] = [];
     
-    for (const row of allRows) {
-      if (row[origDescColIndex] && row[categoryColIndex]) {
-        categorizedTransactions.push({
-          original_description: row[origDescColIndex],
-          updated_description: row[descColIndex] || row[origDescColIndex],
-          category: row[categoryColIndex],
-          amount: parseFloat(row[headers.indexOf(AMOUNT_COL_NAME)] || "0"),
-          date: row[headers.indexOf(DATE_COL_NAME)]
-        });
+    // Only process rows if we have data
+    if (allRows && allRows.length > 0) {
+      for (const row of allRows) {
+        if (row && row[origDescColIndex] && row[categoryColIndex]) {
+          categorizedTransactions.push({
+            original_description: row[origDescColIndex],
+            updated_description: row[descColIndex] || row[origDescColIndex],
+            category: row[categoryColIndex],
+            amount: parseFloat(row[headers.indexOf(AMOUNT_COL_NAME)] || "0"),
+            date: row[headers.indexOf(DATE_COL_NAME)]
+          });
+        }
       }
     }
     
@@ -391,9 +399,11 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
       .slice(0, MAX_REFERENCE_TRANSACTIONS);
     
     // Process categories
-    const categoryValues = categoryColRange.values;
+    const categoryValues = categoryColRange.values || [];
     
-    const categoryList: string[] = categoryValues.map(row => row[0]).filter(Boolean);
+    const categoryList: string[] = categoryValues && categoryValues.length > 0 
+      ? categoryValues.map(row => row && row[0]).filter(Boolean)
+      : [];
     
     // Call AI service to get suggestions
     let suggestedTransactions: SuggestedTransaction[] | null;
@@ -428,7 +438,9 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     // Create a collection of updates to apply
     const updates: { row: number; values: { [key: number]: any } }[] = [];
     
-    for (const suggestion of suggestedTransactions) {
+    for (const suggestion of suggestedTransactions || []) {
+      if (!suggestion || !suggestion.transaction_id) continue;
+      
       const actualRowIndex = transactionMap.get(suggestion.transaction_id);
       
       if (actualRowIndex !== undefined) {
@@ -445,8 +457,15 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
         };
         
         // Set only the columns we want to update
-        rowUpdate.values[descColIndex] = suggestion.updated_description;
+        // Only update description if the setting is enabled
+        if (UPDATE_DESCRIPTIONS) {
+          rowUpdate.values[descColIndex] = suggestion.updated_description;
+        }
+        
+        // Always update category
         rowUpdate.values[categoryColIndex] = category;
+        
+        // Always update AI Touched timestamp
         if (aiTouchedColIndex !== -1) {
           rowUpdate.values[aiTouchedColIndex] = new Date();
         }
@@ -463,12 +482,25 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
       
       // Apply each update to individual cells
       for (const update of updates) {
+        if (!update || typeof update.row !== 'number') continue;
+        
         // For each column to update in this row
-        for (const [colIndex, value] of Object.entries(update.values)) {
+        for (const [colIndex, value] of Object.entries(update.values || {})) {
+          if (value === undefined || value === null) continue;
+          
           // Use the row index directly, since update.row already refers to the position in rowIndices
           const rowIdx = update.row;
-          const cell = dataBodyRange.getCell(rowIndices[rowIdx], parseInt(colIndex));
-          cell.values = [[value]];
+          
+          // Make sure we have a valid row index in our array
+          if (rowIdx < 0 || rowIdx >= rowIndices.length) continue;
+          
+          try {
+            const cell = dataBodyRange.getCell(rowIndices[rowIdx], parseInt(colIndex));
+            cell.values = [[value]];
+          } catch (cellError) {
+            console.error("Error updating cell:", cellError);
+            // Continue with other cells even if one fails
+          }
         }
       }
       

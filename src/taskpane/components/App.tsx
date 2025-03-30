@@ -11,7 +11,8 @@ import {
   Radio, 
   RadioGroup,
   Divider,
-  Field
+  Field,
+  Checkbox
 } from "@fluentui/react-components";
 import { Tag24Regular, Settings24Regular } from "@fluentui/react-icons";
 import { categorizeUncategorizedTransactions, setApiConfig } from "../services/aiCategorization";
@@ -28,7 +29,8 @@ const DEFAULT_SETTINGS = {
   openaiModel: "gpt-4o-mini",
   geminiModel: "gemini-2.0-flash",
   maxBatchSize: 50,
-  maxReferenceTransactions: 2000
+  maxReferenceTransactions: 2000,
+  updateDescriptions: false
 };
 
 interface AppProps {
@@ -51,6 +53,7 @@ interface ApiSettings {
   geminiModel: string;
   maxBatchSize: number;
   maxReferenceTransactions: number;
+  updateDescriptions: boolean;
 }
 
 interface ModelOption {
@@ -105,7 +108,8 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
     openaiModel: DEFAULT_SETTINGS.openaiModel,
     geminiModel: DEFAULT_SETTINGS.geminiModel,
     maxBatchSize: DEFAULT_SETTINGS.maxBatchSize,
-    maxReferenceTransactions: DEFAULT_SETTINGS.maxReferenceTransactions
+    maxReferenceTransactions: DEFAULT_SETTINGS.maxReferenceTransactions,
+    updateDescriptions: DEFAULT_SETTINGS.updateDescriptions
   });
   
   // State for model options
@@ -126,12 +130,13 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
         provider: ENV.GOOGLE_API_KEY ? "gemini" : "openai",
         model: ENV.GOOGLE_API_KEY ? apiSettings.geminiModel : apiSettings.openaiModel,
         maxBatchSize: apiSettings.maxBatchSize,
-        maxReferenceTransactions: apiSettings.maxReferenceTransactions
+        maxReferenceTransactions: apiSettings.maxReferenceTransactions,
+        updateDescriptions: apiSettings.updateDescriptions
       });
     }
   }, []);
   
-  const handleApiSettingChange = (field: keyof ApiSettings, value: string | number) => {
+  const handleApiSettingChange = (field: keyof ApiSettings, value: string | number | boolean) => {
     // Update the local state
     setApiSettings(prev => ({
       ...prev,
@@ -156,7 +161,8 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
       provider: field === 'provider' ? value as 'gemini' | 'openai' : apiSettings.provider,
       model: modelToUse,
       maxBatchSize: field === 'maxBatchSize' ? value as number : apiSettings.maxBatchSize,
-      maxReferenceTransactions: field === 'maxReferenceTransactions' ? value as number : apiSettings.maxReferenceTransactions
+      maxReferenceTransactions: field === 'maxReferenceTransactions' ? value as number : apiSettings.maxReferenceTransactions,
+      updateDescriptions: field === 'updateDescriptions' ? value as boolean : apiSettings.updateDescriptions
     });
   };
 
@@ -556,6 +562,20 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
               }}
             />
           </Field>
+          
+          <Divider className={styles.divider}>
+            <Text>Content Settings</Text>
+          </Divider>
+          
+          <Checkbox
+            label="Update transaction descriptions"
+            checked={apiSettings.updateDescriptions}
+            onChange={(_e, data) => handleApiSettingChange('updateDescriptions', data.checked || false)}
+            style={{ marginBottom: '10px' }}
+          />
+          <Text size={100} style={{ color: '#666', marginLeft: '24px', marginBottom: '15px', display: 'block' }}>
+            When unchecked, only categories will be updated. When checked, both categories and descriptions will be updated.
+          </Text>
         </div>
       )}
     </div>
