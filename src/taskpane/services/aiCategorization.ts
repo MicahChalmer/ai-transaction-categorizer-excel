@@ -96,18 +96,26 @@ function generateCategorizePrompt(categoryList: string[]): string {
           }
         ]}
         
-        For each transaction in the transactions list, follow these instructions:
-        (0) First check if there are any similar transactions in the reference_transactions list.
-            If you find similar transactions, use the same category and a similar updated_description.
+        For EACH transaction in the transactions list, follow these instructions:
+        (1) First check if there are any similar transactions in the reference_transactions list.
+            If you find a good match in this list, use the same category and a similar updated_description.
             Match transactions based on merchant name, description patterns, and similar text.
-        (1) If there are no similar reference transactions, suggest a better "updated_description" according to the following rules:
-        (a) Use all of your knowledge and information to propose a friendly, human readable updated_description for the
-          transaction given the original_description. The input often contains the name of a merchant name.
-          If you know of a merchant it might be referring to, use the name of that merchant for the suggested description.
-        (b) Keep the suggested description as simple as possible. Remove punctuation, extraneous
-          numbers, location information, abbreviations such as "Inc." or "LLC", IDs and account numbers.
-        (2) For each original_description, suggest a "category" for the transaction from the allowed_categories list that was provided.
-        (3) If you are not confident in the suggested category after using your own knowledge and the previous transactions provided, use the cateogry "${FALLBACK_CATEGORY}"
+
+            When looking in this list for good matches, ignore descriptions of the payment method such as "Zelle" or "PayPal", or generic terms like "Payment" or "Transfer"; if those words are present, look instead at
+            who is being corresponded with.  For instance, when looking at a transaction described as "Zelle payment to Alice Bobson", you should look for other transactions involving
+            "Alice Bobson" (even if they are not Zelle) but not match other "Zelle payment" transactions that don't involve Alice Bobson.  Same goes for "PayPal", "Check", and other 
+            descriptions of payment methods rather than counterparties.
+            
+        (2) If there are no similar transactions that match well, suggest a better "updated_description" according to the following rules:
+            (a) Use all of your knowledge to propose a friendly, human readable updated_description.
+                The original_description often contains a merchant name - if you recognize it, use that merchant name.
+            (b) Keep the suggested description as simple as possible. Remove punctuation, extraneous
+                numbers, location information, abbreviations such as "Inc." or "LLC", IDs and account numbers.
+                
+        (3) For the transaction, suggest a "category" from the allowed_categories list provided.
+        
+        (4) If you are not confident in the suggested category after using your own knowledge and the similar transactions provided, 
+            use the category "${FALLBACK_CATEGORY}".
 
         (4) Your response should be a JSON object and no other text.  The response object should be of the form:
         {"suggested_transactions": [
