@@ -67,6 +67,7 @@ const CATEGORY_COL_NAME = "Category";
 const DATE_COL_NAME = "Date";
 const AMOUNT_COL_NAME = "Amount";
 const AI_TOUCHED_COL_NAME = "AI Touched";
+const INSTITUTION_COL_NAME = "Institution";
 
 // Fallback Transaction Category
 const FALLBACK_CATEGORY = "To Be Categorized";
@@ -81,20 +82,25 @@ function generateCategorizePrompt(categoryList: string[]): string {
     ${JSON.stringify(categoryList)}
 
     You will be given JSON input with a list of uncategorized transactions and a set of previously categorized reference transactions in the following format:
-        {"transactions": [
-          {
-            "transaction_id": "A unique ID for this transaction"
-            "original_description": "The original raw transaction description"
-          }
-        ],
-        "reference_transactions": [
-          {
-            "original_description": "The original description of a previously categorized transaction",
-            "updated_description": "The cleaned up description used previously",
-            "category": "The category that was previously assigned",
-            "amount": "The amount of the transaction"
-          }
-        ]}
+        {
+          "transactions": [
+            {
+              "transaction_id": "A unique ID for this transaction",
+              "original_description": "The original raw transaction description",
+              "institution": "The financial institution for this transaction (bank or credit card)"
+            }
+          ],
+          "reference_transactions": [
+            {
+              "transaction_id": "A unique ID for this transaction",
+              "original_description": "The original description of a previously categorized transaction",
+              "updated_description": "The cleaned up description used previously",
+              "category": "The category that was previously assigned",
+              "amount": "The amount of the transaction",
+              "institution": "The financial institution for this transaction (bank or credit card)"
+            }
+          ]
+        }
         
         For EACH transaction in the transactions list, follow these instructions:
         (1) First check if there are any similar transactions in the reference_transactions list.
@@ -105,6 +111,11 @@ function generateCategorizePrompt(categoryList: string[]): string {
             who is being corresponded with.  For instance, when looking at a transaction described as "Zelle payment to Alice Bobson", you should look for other transactions involving
             "Alice Bobson" (even if they are not Zelle) but not match other "Zelle payment" transactions that don't involve Alice Bobson.  Same goes for "PayPal", "Check", and other 
             descriptions of payment methods rather than counterparties.
+            
+            If the transaction's description is very generic like just "Payment" or "Transfer", use the institution to help match, looking for similar transactions from the same institution.
+            
+            If you find a transaction from the similar_transactions that is matched, use its transaction_id in the matched_transaction_id field.
+
             
         (2) If there are no similar transactions that match well, suggest a better "updated_description" according to the following rules:
             (a) Use all of your knowledge to propose a friendly, human readable updated_description.
@@ -136,6 +147,7 @@ interface Transaction {
   original_description: string;
   amount?: number;
   date?: string;
+  institution?: string;
 }
 
 interface CategorizedTransaction {
@@ -144,6 +156,7 @@ interface CategorizedTransaction {
   category: string;
   amount: number;
   date?: string;
+  institution?: string;
 }
 
 interface SuggestedTransaction {
@@ -388,6 +401,7 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     const descColIndex = headers.indexOf(DESCRIPTION_COL_NAME);
     const categoryColIndex = headers.indexOf(CATEGORY_COL_NAME);
     const aiTouchedColIndex = headers.indexOf(AI_TOUCHED_COL_NAME);
+    const institutionColIndex = headers.indexOf(INSTITUTION_COL_NAME);
     
     if (idColIndex === -1 || origDescColIndex === -1 || descColIndex === -1 || categoryColIndex === -1) {
       throw new Error("Required columns not found in Transactions table");
@@ -396,6 +410,11 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     // Don't require AI Touched column to be present, but log if it's missing
     if (aiTouchedColIndex === -1) {
       console.warn("AI Touched column not found in Transactions table");
+    }
+    
+    // Don't require Institution column to be present, but log if it's missing
+    if (institutionColIndex === -1) {
+      console.warn("Institution column not found in Transactions table");
     }
     
     // Get visible rows data
@@ -420,7 +439,8 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
           transaction_id: row[idColIndex] || `row-${i}`,
           original_description: origDesc,
           amount: amount,
-          date: date
+          date: date,
+          institution: institutionColIndex !== -1 ? row[institutionColIndex] : undefined
         });
         rowIndices.push(i);
         
@@ -455,7 +475,8 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
             updated_description: row[descColIndex] || row[origDescColIndex],
             category: row[categoryColIndex],
             amount: parseFloat(row[headers.indexOf(AMOUNT_COL_NAME)] || "0"),
-            date: row[headers.indexOf(DATE_COL_NAME)]
+            date: row[headers.indexOf(DATE_COL_NAME)],
+            institution: institutionColIndex !== -1 ? row[institutionColIndex] : undefined
           });
         }
       }
