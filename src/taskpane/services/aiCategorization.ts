@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { ChatCompletionCreateParams } from 'openai/resources';
 
 // API Keys - These should be set by the user at runtime
 let OPENAI_API_KEY = '';
@@ -200,18 +201,13 @@ export async function lookupDescAndCategoryGemini(
     // Get the shared prompt
     const prompt = generateCategorizePrompt(categoryList);
     
-    // Record API request for debugging
-    const apiRequest = {
-      model: GPT_MODEL,
-      prompt: prompt,
-      data: transactionDict
-    };
-
-    try {
-      const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: JSON.stringify(transactionDict) }] }],
-        systemInstruction: prompt,
-      });
+  const geminiRequest = {
+    contents: [{ role: "user", parts: [{ text: JSON.stringify(transactionDict) }] }],
+    systemInstruction: prompt,
+  };
+  const requestForDebug = {...geminiRequest, contents: [{...geminiRequest.contents[0], parts: [{ text: transactionDict}]}]};
+  try {
+      const result = await model.generateContent(geminiRequest);
   
       const response = result.response;
       const text = response.text();
@@ -225,11 +221,7 @@ export async function lookupDescAndCategoryGemini(
       lastApiInteraction = {
         timestamp: new Date().toISOString(),
         provider: 'Gemini',
-        request: {
-          model: GPT_MODEL,
-          prompt: prompt,
-          data: transactionDict
-        },
+        request: requestForDebug,
         response: text
       };
       
@@ -241,11 +233,7 @@ export async function lookupDescAndCategoryGemini(
       lastApiInteraction = {
         timestamp: new Date().toISOString(),
         provider: 'Gemini',
-        request: {
-          model: GPT_MODEL,
-          prompt: prompt, 
-          data: transactionDict
-        },
+        request: requestForDebug,
         response: null,
         error: error instanceof Error ? { message: error.message, stack: error.stack } : error
       };
@@ -283,41 +271,32 @@ export async function lookupDescAndCategoryOpenAI(
       });
     }
 
-    const transactionDict = {
-      transactions: transactionList,
-      reference_transactions: categorizedTransactions,
-    };
+  const transactionDict = {
+    transactions: transactionList,
+    reference_transactions: categorizedTransactions,
+  };
 
-    // Record API request for debugging
-    const apiRequest = {
-      model: GPT_MODEL,
-      temperature: 0.2,
-      top_p: 0.1,
-      seed: 1,
-      data: transactionDict
-    };
-    
-    try {
-      // Get the shared prompt
-      const prompt = generateCategorizePrompt(categoryList);
+  // Get the shared prompt
+  const prompt = generateCategorizePrompt(categoryList);
+  const openAiRequest: ChatCompletionCreateParams = {
+    model: GPT_MODEL,
+    seed: 1,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: prompt
+      },
+      {
+        role: "user",
+        content: JSON.stringify(transactionDict),
+      }
+    ]
+  };
+  const requestForDebug = {...openAiRequest, messages: [openAiRequest.messages[0], {...openAiRequest.messages[1], content: transactionDict}]}
+  try {
       
-      const completion = await openai.chat.completions.create({
-        model: GPT_MODEL,
-        temperature: 0.2,
-        top_p: 0.1,
-        seed: 1,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content: prompt
-          },
-          {
-            role: "user",
-            content: JSON.stringify(transactionDict),
-          }
-        ]
-      });
+      const completion = await openai.chat.completions.create(openAiRequest);
 
       const response = completion.choices[0].message.content;
       if (!response) {
@@ -328,14 +307,7 @@ export async function lookupDescAndCategoryOpenAI(
       lastApiInteraction = {
         timestamp: new Date().toISOString(),
         provider: 'OpenAI',
-        request: {
-          model: GPT_MODEL,
-          temperature: 0.2,
-          top_p: 0.1,
-          seed: 1,
-          prompt: prompt,
-          data: transactionDict
-        },
+        request: requestForDebug,
         response: response
       };
       
@@ -346,14 +318,7 @@ export async function lookupDescAndCategoryOpenAI(
       lastApiInteraction = {
         timestamp: new Date().toISOString(),
         provider: 'OpenAI',
-        request: {
-          model: GPT_MODEL,
-          temperature: 0.2,
-          top_p: 0.1,
-          seed: 1,
-          prompt: generateCategorizePrompt(categoryList),
-          data: transactionDict
-        },
+        request: requestForDebug,
         response: null,
         error: error instanceof Error ? { message: error.message, stack: error.stack } : error
       };
