@@ -133,7 +133,8 @@ function generateCategorizePrompt(categoryList: string[]): string {
           {
             "transaction_id": "The unique ID previously provided for this transaction",
             "updated_description": "The cleaned up version of the description",
-            "category": "A category selected from the allowed_categories list"
+            "category": "A category selected from the allowed_categories list",
+            "matched_transaction_id": "The transaction_id of the matching reference transaction found for this one, or null if a match was not used"
           }
         ]}
   `;
