@@ -11,7 +11,7 @@ let GPT_MODEL = 'gpt-4.1-mini'; // Can be any openai model designator
 
 // Batch Processing Settings
 let MAX_BATCH_SIZE = 50; // Max number of transactions to categorize in one batch
-let MAX_REFERENCE_TRANSACTIONS = 2000; // Max number of reference transactions to include
+let MAX_REFERENCE_TRANSACTIONS = 5000; // Max number of reference transactions to include
 
 // Content Settings
 let UPDATE_DESCRIPTIONS = false; // Whether to update transaction descriptions or just categories

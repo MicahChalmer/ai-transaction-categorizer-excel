@@ -35,7 +35,7 @@ const DEFAULT_SETTINGS = {
   openaiModel: "gpt-4.1-mini",
   geminiModel: "gemini-2.0-flash",
   maxBatchSize: 50,
-  maxReferenceTransactions: 2000,
+  maxReferenceTransactions: 5000,
   updateDescriptions: false
 };
 
