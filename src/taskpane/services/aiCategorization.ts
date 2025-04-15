@@ -6,8 +6,8 @@ let OPENAI_API_KEY = '';
 let GOOGLE_API_KEY = '';
 
 // LLM To Use
-let AI_PROVIDER = 'gemini'; // Can be 'gemini' or 'openai'
-let GPT_MODEL = 'gpt-4o-mini'; // Can be any openai model designator
+let AI_PROVIDER = 'openai'; // Can be 'gemini' or 'openai'
+let GPT_MODEL = 'gpt-4.1-mini'; // Can be any openai model designator
 
 // Batch Processing Settings
 let MAX_BATCH_SIZE = 50; // Max number of transactions to categorize in one batch

@@ -31,8 +31,8 @@ const ENV = {
 
 // Default settings values
 const DEFAULT_SETTINGS = {
-  provider: "gemini" as const,
-  openaiModel: "gpt-4o-mini",
+  provider: "openai" as const,
+  openaiModel: "gpt-4.1-mini",
   geminiModel: "gemini-2.0-flash",
   maxBatchSize: 50,
   maxReferenceTransactions: 2000,
@@ -163,7 +163,7 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
         openaiKey: ENV.OPENAI_API_KEY || "",
         googleKey: ENV.GOOGLE_API_KEY || "",
         provider: ENV.GOOGLE_API_KEY ? "gemini" : "openai",
-        model: ENV.GOOGLE_API_KEY ? apiSettings.geminiModel : apiSettings.openaiModel,
+        model: ENV.OPENAI_API_KEY ? apiSettings.openaiModel : apiSettings.geminiModel,
         maxBatchSize: apiSettings.maxBatchSize,
         maxReferenceTransactions: apiSettings.maxReferenceTransactions,
         updateDescriptions: apiSettings.updateDescriptions
