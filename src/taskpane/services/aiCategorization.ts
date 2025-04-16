@@ -165,6 +165,7 @@ interface SuggestedTransaction {
   transaction_id: string;
   updated_description: string;
   category: string;
+  matched_transaction_id?: string;
 }
 
 interface AIError {
@@ -491,41 +492,53 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     let updatedCount = 0;
     
     // Create a collection of updates to apply
-    const updates: { row: number; values: { [key: number]: any } }[] = [];
+    interface CellUpdate {
+      rowIndex: number; // Index in visible range
+      colIndex: number;
+      value: any;
+    }
+    
+    const cellUpdates: CellUpdate[] = [];
     
     for (const suggestion of suggestedTransactions || []) {
       if (!suggestion || !suggestion.transaction_id) continue;
       
-      const actualRowIndex = transactionMap.get(suggestion.transaction_id);
+      const rowIndexInVisibleRange = transactionMap.get(suggestion.transaction_id);
       
-      if (actualRowIndex !== undefined) {
+      if (rowIndexInVisibleRange !== undefined) {
         // Validate category
         let category = suggestion.category;
         if (!categoryList.includes(category)) {
           category = FALLBACK_CATEGORY;
         }
         
-        // Collect updates for this row
-        const rowUpdate = {
-          row: actualRowIndex,
-          values: {} as { [key: number]: any }
-        };
+        // Create individual cell updates for this row
         
-        // Set only the columns we want to update
         // Only update description if the setting is enabled
         if (UPDATE_DESCRIPTIONS) {
-          rowUpdate.values[descColIndex] = suggestion.updated_description;
+          cellUpdates.push({
+            rowIndex: rowIndexInVisibleRange,
+            colIndex: descColIndex,
+            value: suggestion.updated_description
+          });
         }
         
         // Always update category
-        rowUpdate.values[categoryColIndex] = category;
+        cellUpdates.push({
+          rowIndex: rowIndexInVisibleRange,
+          colIndex: categoryColIndex,
+          value: category
+        });
         
         // Always update AI Touched timestamp
         if (aiTouchedColIndex !== -1) {
-          rowUpdate.values[aiTouchedColIndex] = new Date();
+          cellUpdates.push({
+            rowIndex: rowIndexInVisibleRange,
+            colIndex: aiTouchedColIndex,
+            value: new Date()
+          });
         }
         
-        updates.push(rowUpdate);
         updatedCount++;
       }
     }
@@ -535,27 +548,14 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
       // Get the original body range for direct cell access
       const dataBodyRange = transactionsTable.getDataBodyRange();
       
-      // Apply each update to individual cells
-      for (const update of updates) {
-        if (!update || typeof update.row !== 'number') continue;
-        
-        // For each column to update in this row
-        for (const [colIndex, value] of Object.entries(update.values || {})) {
-          if (value === undefined || value === null) continue;
-          
-          // Use the row index directly, since update.row already refers to the position in rowIndices
-          const rowIdx = update.row;
-          
-          // Make sure we have a valid row index in our array
-          if (rowIdx < 0 || rowIdx >= rowIndices.length) continue;
-          
-          try {
-            const cell = dataBodyRange.getCell(rowIndices[rowIdx], parseInt(colIndex));
-            cell.values = [[value]];
-          } catch (cellError) {
-            console.error("Error updating cell:", cellError);
-            // Continue with other cells even if one fails
-          }
+      // Apply each cell update directly
+      for (const update of cellUpdates) {
+        try {
+          const cell = dataBodyRange.getCell(update.rowIndex, update.colIndex);
+          cell.values = [[update.value]];
+        } catch (cellError) {
+          console.error("Error updating cell:", cellError);
+          // Continue with other cells even if one fails
         }
       }
       
