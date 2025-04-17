@@ -536,12 +536,17 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
           value: category
         });
         
-        // Always update AI Touched timestamp
+        // Always update AI Touched timestamp with Excel's numeric date value
         if (aiTouchedColIndex !== -1) {
+          // Convert to Excel numeric date (days since 1900-01-01)
+          // Excel stores dates as days since 1900-01-01 with the decimal portion representing time
+          const date = new Date();
+          const excelDate = 25569 + (date.getTime() / (24 * 60 * 60 * 1000));
+          
           cellUpdates.push({
             rowIndex: rowIndexInVisibleRange,
             colIndex: aiTouchedColIndex,
-            value: new Date()
+            value: excelDate
           });
         }
         
