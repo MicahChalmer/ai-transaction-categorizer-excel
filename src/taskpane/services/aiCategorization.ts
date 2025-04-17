@@ -153,6 +153,7 @@ interface Transaction {
 }
 
 interface CategorizedTransaction {
+  transaction_id: string;
   original_description: string;
   updated_description: string;
   category: string;
@@ -438,6 +439,7 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
       for (const row of allRows) {
         if (row && row[origDescColIndex] && row[categoryColIndex]) {
           categorizedTransactions.push({
+            transaction_id: row[idColIndex],
             original_description: row[origDescColIndex],
             updated_description: row[descColIndex] || row[origDescColIndex],
             category: row[categoryColIndex],
