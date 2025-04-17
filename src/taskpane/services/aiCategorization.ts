@@ -389,14 +389,15 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
       console.warn("Institution column not found in Transactions table");
     }
     
-    // Get visible rows data
-    const visibleRange = transactionsTable.getDataBodyRange().getVisibleView().load("values");
+    // Get visible rows data along with cell addresses
+    const visibleRange = transactionsTable.getDataBodyRange().getVisibleView().load(["values", "cellAddresses"]);
     await context.sync();
     const rows = visibleRange.values;
+    const cellAddressesArray = visibleRange.cellAddresses;
     
     // Find uncategorized transactions (with original description but no category)
     const uncategorizedTransactions: Transaction[] = [];
-    const rowIndices: number[] = [];
+    const rowAddresses: {[key: string]: string[][]} = {};
     
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -407,14 +408,16 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
         const amount = parseFloat(row[headers.indexOf(AMOUNT_COL_NAME)] || "0");
         const date = row[headers.indexOf(DATE_COL_NAME)];
         
+        const transactionId = row[idColIndex] || `row-${i}`;
         uncategorizedTransactions.push({
-          transaction_id: row[idColIndex] || `row-${i}`,
+          transaction_id: transactionId,
           original_description: origDesc,
           amount: amount,
           date: date,
           institution: institutionColIndex !== -1 ? row[institutionColIndex] : undefined
         });
-        rowIndices.push(i);
+        // Store cell addresses for this row (we'll use these to update the correct cells)
+        rowAddresses[transactionId] = cellAddressesArray[i];
         
         // Limit batch size
         if (uncategorizedTransactions.length >= MAX_BATCH_SIZE) {
@@ -488,19 +491,12 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
       return { success: false, message: "Failed to get suggestions from AI provider" };
     }
     
-    // Create a map for quick transaction lookup by ID
-    const transactionMap = new Map();
-    uncategorizedTransactions.forEach((tx, index) => {
-      transactionMap.set(tx.transaction_id, rowIndices[index]);
-    });
-    
     // Process suggestions and update cells directly
     let updatedCount = 0;
     
     // Create a collection of updates to apply
     interface CellUpdate {
-      rowIndex: number; // Index in visible range
-      colIndex: number;
+      address: string; // Full cell address (e.g., "A1")
       value: any;
     }
     
@@ -509,9 +505,9 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     for (const suggestion of suggestedTransactions || []) {
       if (!suggestion || !suggestion.transaction_id) continue;
       
-      const rowIndexInVisibleRange = transactionMap.get(suggestion.transaction_id);
+      const addresses = rowAddresses[suggestion.transaction_id];
       
-      if (rowIndexInVisibleRange !== undefined) {
+      if (addresses) {
         // Validate category
         let category = suggestion.category;
         if (!categoryList.includes(category)) {
@@ -523,16 +519,14 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
         // Only update description if the setting is enabled
         if (UPDATE_DESCRIPTIONS) {
           cellUpdates.push({
-            rowIndex: rowIndexInVisibleRange,
-            colIndex: descColIndex,
+            address: addresses[descColIndex][0], // Get the address for the description cell
             value: suggestion.updated_description
           });
         }
         
         // Always update category
         cellUpdates.push({
-          rowIndex: rowIndexInVisibleRange,
-          colIndex: categoryColIndex,
+          address: addresses[categoryColIndex][0], // Get the address for the category cell
           value: category
         });
         
@@ -544,8 +538,7 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
           const excelDate = 25569 + (date.getTime() / (24 * 60 * 60 * 1000));
           
           cellUpdates.push({
-            rowIndex: rowIndexInVisibleRange,
-            colIndex: aiTouchedColIndex,
+            address: addresses[aiTouchedColIndex][0], // Get the address for the AI Touched cell
             value: excelDate
           });
         }
@@ -556,13 +549,11 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     
     // Apply all updates
     if (updatedCount > 0) {
-      // Get the original body range for direct cell access
-      const dataBodyRange = transactionsTable.getDataBodyRange();
-      
-      // Apply each cell update directly
+      // Apply each cell update directly using cell addresses
       for (const update of cellUpdates) {
         try {
-          const cell = dataBodyRange.getCell(update.rowIndex, update.colIndex);
+          // Get the range for the specific cell using its address
+          const cell = context.workbook.worksheets.getActiveWorksheet().getRange(update.address);
           cell.values = [[update.value]];
         } catch (cellError) {
           console.error("Error updating cell:", cellError);
