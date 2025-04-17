@@ -1,4 +1,4 @@
-# Tiller AI for Excel
+# AI Autocategorizer for Excel
 
 An Excel add-in that helps categorize financial transactions using AI (OpenAI or Google Gemini).
 
@@ -7,12 +7,6 @@ An Excel add-in that helps categorize financial transactions using AI (OpenAI or
 - Auto-categorize transactions in a Tiller-style spreadsheet
 - Works with OpenAI or Google Gemini AI models
 - Automatically suggests categories and cleans up transaction descriptions
-
-## Prerequisites
-
-- Excel (desktop or web)
-- Node.js and npm
-- API key from OpenAI or Google (for Gemini)
 
 ## Setup
 
@@ -27,7 +21,7 @@ An Excel add-in that helps categorize financial transactions using AI (OpenAI or
    ```
 4. Build the add-in:
    ```
-   npm run build
+   npm run build:dev
    ```
 5. Start the add-in in Excel:
    ```

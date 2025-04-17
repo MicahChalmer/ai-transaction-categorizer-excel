@@ -4,8 +4,8 @@
   <Version>1.0.0.0</Version>
   <ProviderName>Micah Chalmer</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="Tiller AI For Excel"/>
-  <Description DefaultValue="Tiller AI for Excel"/>
+  <DisplayName DefaultValue="AI Autocategorizer For Excel"/>
+  <Description DefaultValue="AI Autocategorizer for Excel"/>
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
   <SupportUrl DefaultValue="https://example.com/"/>
@@ -21,7 +21,7 @@
       <Host xsi:type="Workbook">
         <DesktopFormFactor>
           <GetStarted>
-            <Title resid="TillerAIForExcel.Title"/>
+            <Title resid="AITransactionAutocat.Title"/>
             <Description resid="GetStarted.Description"/>
             <LearnMoreUrl resid="GetStarted.LearnMoreUrl"/>
           </GetStarted>
@@ -69,13 +69,13 @@
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="TillerAIForExcel.Title" DefaultValue="Tiller AI for Excel"/>
-        <bt:String id="CommandsGroup.Label" DefaultValue="Tiller Money"/>
-        <bt:String id="TaskpaneButton.Label" DefaultValue="Show Tiller AI for Excel"/>
+        <bt:String id="AITransactionAutocat.Title" DefaultValue="AI Transaction Autocategorizer"/>
+        <bt:String id="CommandsGroup.Label" DefaultValue="AI Transaction Autocategorizer"/>
+        <bt:String id="TaskpaneButton.Label" DefaultValue="AI Transaction Autocategorizer"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Tilled AI for Excel"/>
-        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Click to Tiller AI For Excel"/>
+        <bt:String id="GetStarted.Description" DefaultValue="AI Transaction Autocategorizer"/>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Automatically categorize card and bank transactions using AI"/>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

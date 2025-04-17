@@ -1,4 +1,4 @@
-# Tiller AI for Excel - Development Guidelines
+# AI Autocategorizer for Excel - Development Guidelines
 
 ## Build & Development Commands
 - `npm run build` - Production build

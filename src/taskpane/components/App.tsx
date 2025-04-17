@@ -40,7 +40,6 @@ const DEFAULT_SETTINGS = {
 };
 
 interface AppProps {
-  title: string;
 }
 
 type MessageBarIntent = "success" | "error" | "warning" | "info";
