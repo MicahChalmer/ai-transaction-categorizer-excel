@@ -347,17 +347,13 @@ export async function lookupDescAndCategoryOpenAI(
 export async function categorizeUncategorizedTransactions(context: Excel.RequestContext) {
   try {
     // Get the Transactions table
-    const transactionsTable = context.workbook.tables.getItem("Transactions");
-    await context.sync();
-    
+    const transactionsTable = context.workbook.tables.getItem("Transactions");    
     if (!transactionsTable) {
       throw new Error("Transactions table not found in the workbook");
     }
     
     // Get the Categories table
-    const categoriesTable = context.workbook.tables.getItem("Categories");
-    await context.sync();
-    
+    const categoriesTable = context.workbook.tables.getItem("Categories");    
     if (!categoriesTable) {
       throw new Error("Categories table not found in the workbook");
     }
@@ -374,6 +370,8 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     const categoryColIndex = headers.indexOf(CATEGORY_COL_NAME);
     const aiTouchedColIndex = headers.indexOf(AI_TOUCHED_COL_NAME);
     const institutionColIndex = headers.indexOf(INSTITUTION_COL_NAME);
+    const amountColIndex = headers.indexOf(AMOUNT_COL_NAME);
+    const dateColIndex = headers.indexOf(DATE_COL_NAME);
     
     if (idColIndex === -1 || origDescColIndex === -1 || descColIndex === -1 || categoryColIndex === -1) {
       throw new Error("Required columns not found in Transactions table");
@@ -390,34 +388,34 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     }
     
     // Get visible rows data along with cell addresses
-    const visibleRange = transactionsTable.getDataBodyRange().getVisibleView().load(["values", "cellAddresses"]);
+    const visibleRangeRows = transactionsTable.getDataBodyRange().getVisibleView().load(["rows"]);
     await context.sync();
-    const rows = visibleRange.values;
-    const cellAddressesArray = visibleRange.cellAddresses;
+    const rowRanges = (visibleRangeRows.rows.items.map(vr => vr.getRange().load(["values"])));
+    await context.sync();
     
     // Find uncategorized transactions (with original description but no category)
     const uncategorizedTransactions: Transaction[] = [];
-    const rowAddresses: {[key: string]: string[][]} = {};
+    const idToRowRange: {[key: string]: Excel.Range} = {};
     
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const origDesc = row[origDescColIndex];
-      const category = row[categoryColIndex];
+    for (const [i, rowRange] of rowRanges.entries()) {
+      const values = rowRange.values[0];
+      const origDesc = values[origDescColIndex];
+      const category = values[categoryColIndex];
       
       if (origDesc && !category) {
-        const amount = parseFloat(row[headers.indexOf(AMOUNT_COL_NAME)] || "0");
-        const date = row[headers.indexOf(DATE_COL_NAME)];
+        const amount = parseFloat(values[amountColIndex] || "0");
+        const date = values[dateColIndex];
         
-        const transactionId = row[idColIndex] || `row-${i}`;
+        const transactionId = values[idColIndex] || `row-${i}`;
         uncategorizedTransactions.push({
           transaction_id: transactionId,
           original_description: origDesc,
           amount: amount,
           date: date,
-          institution: institutionColIndex !== -1 ? row[institutionColIndex] : undefined
+          institution: institutionColIndex !== -1 ? values[institutionColIndex] : undefined
         });
         // Store cell addresses for this row (we'll use these to update the correct cells)
-        rowAddresses[transactionId] = cellAddressesArray[i];
+        idToRowRange[transactionId] = rowRange;
         
         // Limit batch size
         if (uncategorizedTransactions.length >= MAX_BATCH_SIZE) {
@@ -493,21 +491,13 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
     
     // Process suggestions and update cells directly
     let updatedCount = 0;
-    
-    // Create a collection of updates to apply
-    interface CellUpdate {
-      address: string; // Full cell address (e.g., "A1")
-      value: any;
-    }
-    
-    const cellUpdates: CellUpdate[] = [];
-    
-    for (const suggestion of suggestedTransactions || []) {
+        
+    for (const suggestion of suggestedTransactions) {
       if (!suggestion || !suggestion.transaction_id) continue;
       
-      const addresses = rowAddresses[suggestion.transaction_id];
+      const rowRange = idToRowRange[suggestion.transaction_id];
       
-      if (addresses) {
+      if (rowRange) {
         // Validate category
         let category = suggestion.category;
         if (!categoryList.includes(category)) {
@@ -518,17 +508,11 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
         
         // Only update description if the setting is enabled
         if (UPDATE_DESCRIPTIONS) {
-          cellUpdates.push({
-            address: addresses[descColIndex][0], // Get the address for the description cell
-            value: suggestion.updated_description
-          });
+          rowRange.getCell(0,descColIndex).values = [[suggestion.updated_description]];
         }
         
         // Always update category
-        cellUpdates.push({
-          address: addresses[categoryColIndex][0], // Get the address for the category cell
-          value: category
-        });
+        rowRange.getCell(0,categoryColIndex).values = [[category]];
         
         // Always update AI Touched timestamp with Excel's numeric date value
         if (aiTouchedColIndex !== -1) {
@@ -537,31 +521,17 @@ export async function categorizeUncategorizedTransactions(context: Excel.Request
           const date = new Date();
           const excelDate = 25569 + (date.getTime() / (24 * 60 * 60 * 1000));
           
-          cellUpdates.push({
-            address: addresses[aiTouchedColIndex][0], // Get the address for the AI Touched cell
-            value: excelDate
-          });
+          rowRange.getCell(0,aiTouchedColIndex).values = [[excelDate]];
         }
         
         updatedCount++;
       }
     }
+    await context.sync();
     
     // Apply all updates
     if (updatedCount > 0) {
       // Apply each cell update directly using cell addresses
-      for (const update of cellUpdates) {
-        try {
-          // Get the range for the specific cell using its address
-          const cell = context.workbook.worksheets.getActiveWorksheet().getRange(update.address);
-          cell.values = [[update.value]];
-        } catch (cellError) {
-          console.error("Error updating cell:", cellError);
-          // Continue with other cells even if one fails
-        }
-      }
-      
-      await context.sync();
       return { success: true, message: `Updated ${updatedCount} transactions` };
     } else {
       return { success: true, message: `No transactions needed updating` };
