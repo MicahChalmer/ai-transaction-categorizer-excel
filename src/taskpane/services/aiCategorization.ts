@@ -104,19 +104,21 @@ function generateCategorizePrompt(categoryList: string[]): string {
         }
         
         For EACH transaction in the transactions list, follow these instructions:
-        (1) First check if there are any similar transactions in the reference_transactions list.
-            If you find a good match in this list, use the same category and a similar updated_description.
-            Match transactions based on merchant name, description patterns, and similar text.
+        (1) First check if there are any similar transactions in the reference_transactions list.  This is a list of prior transactions that have already been categorized.
+            The goal is to categorize the "transactions" list in a similar way to the ones in the "reference_transactions" list.
+            A similar transaction is one with a similar description.  If you find a good match, use the same category and a similar updated_description for this transaction.
+            
+            If the transaction's description is very generic like just "Payment" or "Transfer", use the institution to help match, looking for similar transactions from the same institution.
 
             When looking in this list for good matches, ignore descriptions of the payment method such as "Zelle" or "PayPal", or generic terms like "Payment" or "Transfer"; if those words are present, look instead at
             who is being corresponded with.  For instance, when looking at a transaction described as "Zelle payment to Alice Bobson", you should look for other transactions involving
             "Alice Bobson" (even if they are not Zelle) but not match other "Zelle payment" transactions that don't involve Alice Bobson.  Same goes for "PayPal", "Check", and other 
             descriptions of payment methods rather than counterparties.
-            
-            If the transaction's description is very generic like just "Payment" or "Transfer", use the institution to help match, looking for similar transactions from the same institution.
-            
-            If you find a transaction from the similar_transactions that is matched, use its transaction_id in the matched_transaction_id field.
 
+            On the other hand, you should still find a match if there are slight differnces in the descriptions, particularly strings with numbers at the end or differences in only whitespace.
+            For instance, "Alpha Bravo Charlie x737878" could match wtih "ALPHA   BRAVO    CHARLIE XXXXXX34345".
+            
+            If you find a transaction from the similar_transactions that matches, include the transaction_id from the matched reference transaction in the this transaction's matched_transaction_id field.
             
         (2) If there are no similar transactions that match well, suggest a better "updated_description" according to the following rules:
             (a) Use all of your knowledge to propose a friendly, human readable updated_description.
@@ -130,14 +132,16 @@ function generateCategorizePrompt(categoryList: string[]): string {
             use the category "${FALLBACK_CATEGORY}".
 
         (4) Your response should be a JSON object and no other text.  The response object should be of the form:
-        {"suggested_transactions": [
-          {
-            "transaction_id": "The unique ID previously provided for this transaction",
-            "updated_description": "The cleaned up version of the description",
-            "category": "A category selected from the allowed_categories list",
-            "matched_transaction_id": "The transaction_id of the matching reference transaction found for this one, or null if a match was not used"
-          }
-        ]}
+        {
+          "suggested_transactions": [
+            {
+              "transaction_id": "The unique ID previously provided for this transaction",
+              "updated_description": "The cleaned up version of the description",
+              "category": "A category selected from the allowed_categories list",
+              "matched_transaction_id": "The transaction_id of the matching reference transaction found for this one, or null if no match was found.  If provided, this must be a matching transaction from the reference_transactions list, not the same ID as this transaction from the transactions list."
+            }
+          ]
+        }
   `;
 }
 
