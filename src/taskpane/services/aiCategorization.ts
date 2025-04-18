@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GenerateContentParameters, GoogleGenAI } from '@google/genai';
 import { ChatCompletionCreateParams } from 'openai/resources';
 
 // API Keys - These should be set by the user at runtime
@@ -34,7 +34,7 @@ export function getLastApiInteraction(): ApiInteraction | null {
 
 // API clients - initialized on-demand when keys are available
 let openai: OpenAI | null = null;
-let genAI: GoogleGenerativeAI | null = null;
+let genAI: GoogleGenAI | null = null;
 
 // Function to set API keys and config at runtime
 export function setApiConfig(config: {
@@ -194,7 +194,7 @@ export async function lookupDescAndCategoryGemini(
   try {
     // Initialize the API client if needed
     if (!genAI) {
-      genAI = new GoogleGenerativeAI(GOOGLE_API_KEY);
+      genAI = new GoogleGenAI({apiKey: GOOGLE_API_KEY});
     }
 
     const transactionDict = {
@@ -202,21 +202,22 @@ export async function lookupDescAndCategoryGemini(
       reference_transactions: categorizedTransactions,
     };
 
-    const model = genAI.getGenerativeModel({ model: GPT_MODEL });
-    
     // Get the shared prompt
     const prompt = generateCategorizePrompt(categoryList);
     
-  const geminiRequest = {
-    contents: [{ role: "user", parts: [{ text: JSON.stringify(transactionDict) }] }],
-    systemInstruction: prompt,
+  const geminiRequest: GenerateContentParameters = {
+    model: GPT_MODEL,
+    contents: [
+      { role: "model", parts: [{text: prompt}]},
+      { role: "user", parts: [{ text: JSON.stringify(transactionDict) }] }
+    ],
   };
+
   const requestForDebug = {...geminiRequest, contents: [{...geminiRequest.contents[0], parts: [{ text: transactionDict}]}]};
   try {
-      const result = await model.generateContent(geminiRequest);
+      const response = await genAI.models.generateContent(geminiRequest);
   
-      const response = result.response;
-      const text = response.text();
+      const text = response.text;
       
       // Extract JSON from the response 
       const jsonStart = text.indexOf("{");
