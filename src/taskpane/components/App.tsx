@@ -682,9 +682,9 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
           </Field>
           
           <Field 
-            label="Reference Transactions" 
+            label="Max Reference Transactions" 
             className={styles.apiKeyField}
-            hint="Maximum number of previously categorized transactions to use as reference"
+            hint="Maximum number of already-categorized transactions to include as reference."
           >
             <Input 
               type="text"
