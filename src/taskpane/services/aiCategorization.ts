@@ -87,6 +87,8 @@ function generateCategorizePrompt(categoryList: string[]): string {
           "transactions": [
             {
               "transaction_id": "A unique ID for this transaction",
+              "amount": "The amount of the transaction",
+              "date": "The date of the transaction",
               "original_description": "The original raw transaction description",
               "institution": "The financial institution for this transaction (bank or credit card)"
             }
@@ -98,6 +100,7 @@ function generateCategorizePrompt(categoryList: string[]): string {
               "updated_description": "The cleaned up description used previously",
               "category": "The category that was previously assigned",
               "amount": "The amount of the transaction",
+              "date": "The date of the transaction",
               "institution": "The financial institution for this transaction (bank or credit card)"
             }
           ]
